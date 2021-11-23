@@ -1,0 +1,1525 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:module-msi-logger="http://www.mulesoft.org/schema/mule/module-msi-logger"
+	xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns:email="http://www.mulesoft.org/schema/mule/email"
+	xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:salesforce="http://www.mulesoft.org/schema/mule/salesforce" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/salesforce http://www.mulesoft.org/schema/mule/salesforce/current/mule-salesforce.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/email http://www.mulesoft.org/schema/mule/email/current/mule-email.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd
+http://www.mulesoft.org/schema/mule/module-msi-logger http://www.mulesoft.org/schema/mule/module-msi-logger/current/mule-module-msi-logger.xsd">
+	<flow name="PrcsUnifiedBackendUpsertToC360Flow" doc:id="1c5452a2-3959-47b7-9603-b733f2a5d29a" >
+		<set-variable value="#[payload]" doc:name="CaptureInputPayload" doc:id="2dd7fcc8-9c64-49cd-8b79-ebc0d7e374de" variableName="inputpayload"/>
+		<set-variable value="#[%dw 2.0
+output application/java
+var corId=correlationId
+var appName=p('secure::api_name')
+var resName=p('secure::res.name')
+
+---
+corId ++ '||' ++ appName ++ ':' ++ resName]" doc:name="loggerVar" doc:id="73a6d9db-f6ae-4f9b-99c8-5654d704f9f9" variableName="logger"/>
+		<logger level="INFO" doc:name="Request Started" doc:id="554321aa-2c92-4e9f-a016-7a281878bccb" message="#[vars.logger]||Started||" />
+		<set-variable value="#[payload.payload.Identifier__c]" doc:name="uniqueIdVar" doc:id="fd4275b6-e76d-4f2d-8d2b-35e1487233ea" variableName="uniqueIdVar"/>
+		<set-variable value="#[payload]" doc:name="UserReqPaylaodVar" doc:id="85f4adf8-6ffb-43d5-980b-f4d2caaaaf50" variableName="UserReqPaylaodVar" />
+		<logger level="INFO" doc:name="Logger for Payload" doc:id="3e4f7d62-fed4-44d4-adf3-b6839e05d8f3" message="#[vars.logger]||#[vars.uniqueIdVar]||#[payload]||" />
+		<choice doc:name="Choice" doc:id="c039a95b-9f62-425d-ba81-b143974c9ca7" >
+			<when expression="#[payload.payload.Identifier__c == p('secure::UserChangeEventIdentifier')]">
+				<logger level="INFO" doc:name="Logger for User Change DataFlow" doc:id="f648062c-791e-467d-9455-9eb24c7a79b1" message="[#[vars.logger]||#[vars.uniqueIdVar]||Call User Data C360Flow||Started||]"/>
+				<set-variable value="#[payload.payload.Operation__c]" doc:name="Extracting Operation__c value" doc:id="70a80329-1a19-4269-94ba-f353e64c05c0" variableName="Operation__c"/>
+				<flow-ref doc:name="Call UserDataC360 Flow" doc:id="ddc9ca46-7ca9-4bcd-b618-165a1d572163" name="UserDataC360Flow"/>
+			
+</when>
+			<when expression="#[payload.payload.Identifier__c == p('secure::PartnerEventIdentifier')]">
+				<logger level="INFO" doc:name="Logger for Partner Enterprise DataFlow" doc:id="76cd7a1e-e332-4624-a4f5-d19cd911fc34" message="#[vars.logger]||#[vars.uniqueIdVar]||Call Partner Enterprise C360Flow||Started||" />
+				<flow-ref doc:name="Call PartnerDataC360 Flow" doc:id="fd82abc3-c703-4096-9ab4-b1136082ab91" name="PartnerDataToC360Flow"/>
+			</when>
+          <when expression="#[payload.payload.Identifier__c == p('secure::DenyEventIdentifier')]">	
+				<logger level="INFO" doc:name="Inside DenyUserFlow" doc:id="907a5001-6c04-4863-a158-2605f7798d43" message="#[vars.logger]|| ||Call DenyUserRegC360Flow with Identifier: DenyUserRegistration ||" />
+				<flow-ref doc:name="Call DenyUserRegUpdateToC360Sub_Flow" doc:id="20b7fa37-a5a3-4925-b6ad-c10be700fe95" name="DenyUserRegUpdateToC360Sub_Flow" />	
+			</when>
+			<when expression="#[payload.payload.Identifier__c == p('secure::InvitedEventIdentifier')]">
+				<logger level="INFO" doc:name="Inside InvitedUserDataFlow" doc:id="8c453058-6f01-4007-960b-cdf477bd891a" message="#[vars.logger]||EventName: #[vars.uniqueIdVar]||Invite User Data C360Flow Started||"/>
+				<set-variable value="#[payload.payload.Admin_UserLoginID__c]" doc:name="Extracting Admin Login ID value" doc:id="7c9d5b4a-399a-4d19-9efe-d0fae9acbe57" variableName="Admin_UserLoginID__c" />
+				<flow-ref doc:name="Call Invited User Data Flow" doc:id="efdec42c-291d-4aea-8fa5-b291c995d881" name="InvitedUserDataC360Flow"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Default Logger" doc:id="1c45eec6-f786-44b0-9888-07d200514c49" message="${secure::uniqueLogger.UpsertUser} ||#[vars.uniqueIdVar]||No Matching Identifier Fount/||#[payload]||"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="99256e20-13f3-4a5d-9cac-653814e66349" >
+				<logger level="INFO" doc:name="Inside Exception Handling Block" doc:id="6b0c49dd-7fed-44b3-89e1-9beed0535ac1" message="#[vars.logger]||Inside Exception Block||"/>
+				<async doc:name="Async" doc:id="337faef8-c8ef-47ce-b6c7-aa34240fe145" maxConcurrency="${secure::er.async.max}">
+					<logger level="INFO" doc:name="Publishing Error Events" doc:id="e7599a1f-ea85-4d84-8419-0cd72874678c" message="#[vars.logger]||Publishing Error Events||"/>
+					<ee:transform doc:name="Set Error Payload" doc:id="61d77640-56b4-4aed-9f9c-acef70418d1e">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ErrorMessage: {
+		UniqueQualifier: p('secure::er.uniq.qualifier.c360'),
+		CustomMessage: p('secure::er.cust.msg.prcs.purecloud.entitlement'),
+		Error: {
+			time: now() as String {format: "dd-MMM-yyyy HH:mm:ss"},
+			error: error.detailedDescription,  
+			errorType: error.errorType.namespace ++ error.errorType.identifier,
+			errorDump: error.detailedDescription ,
+			service: p('secure::UserFlow'),
+			user: p('secure::er.user'),
+			nestedErrorInfo: {
+				time: "1",
+				error: "1",
+				errorType: "1",
+				errorDump: "1",
+				service1: "1",
+				user: "1"
+			}
+		},
+		Module: {
+			ModuleName: p('secure::er.mod.name.c360'),
+			ServiceName: p('secure::UserFlow')
+		},
+		Action: {
+			Email: {
+				SendEmail: p('secure::er.send.email'),
+				DistributionList: p('secure::er.email.list')
+			},
+			Ticket: {
+				CreateTicket: p('secure::er.create.ticket'),
+				Impact: p('secure::er.impact'),
+				Urgency: p('secure::er.urgency') ,
+				SupportTeam: p('secure::er.support.team'),
+				Category: p('secure::er.category'),
+				SubCategory: p('secure::er.sub.category'),
+				CMDBCI: p('secure::er.CMDBCI')
+			}
+		},
+		SuppressDuplicates: {
+			EnableSuppression: p('secure::er.enable.suppression'),
+			Suppress_On_Same_Message: p('secure::er.suppress.on.same.message')
+		}
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<vm:publish doc:name="Publish Error Events" doc:id="97968789-66f0-4d58-9de4-a437480bc5d5" config-ref="ErrorHandler_VM_Config" queueName="ErrorHandlerVMQueue" timeout="${secure::er.vm.timeout}" />
+				</async>
+				<ee:transform doc:name="Set Error Response" doc:id="80087867-81c6-45f7-a114-0512c6f6a156">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Status" : "Internal Server Exception",
+	"Error" : error.errorType.namespace ++ error.errorType.identifier
+}]]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus"><![CDATA[500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Process Completed" doc:id="c00303e4-5aba-479d-b8b7-d40d5a35c66a" message="#[vars.uniqueLogger]||Completed||Error||" />
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+        <sub-flow name="DenyUserRegUpdateToC360Sub_Flow" doc:id="b5f284d8-31f1-45fc-a2a2-55fdbaeddb60" >
+		<logger level="INFO" doc:name="Logger Before invoking C360 Mule System API for Deny User" doc:id="f892ad69-51c4-48be-8e99-0b3c1e8db42d" message="#[vars.logger]||#[vars.uniqueIdVar]:#[payload.payload.New__c]||Before invoking C360 Mule System API for Deny User||"/>	
+		<until-successful maxRetries="${secure::mule.http.reconnection.retry}" doc:name="Until Successful" doc:id="efa4ba87-ed00-4a3f-b599-4a374448b1e6" millisBetweenRetries="${secure::mule.http.reconnection.ms}">
+			<http:request method="GET" doc:name="Call C360 Mule System API" doc:id="7aaf9213-7364-4f25-8a8e-a27904777e99" config-ref="HTTP_Mule_Request_Configuration" path="${secure::deny.admin.path}">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"login_id" : payload.payload.User_LoginId__c,
+	"oam_session" : payload.payload.Admin_UserLoginID__c
+}]]]></http:uri-params>
+			<http:response-validator>
+				<http:success-status-code-validator values="${secure::http.mule.sys.c360.responsevalidator.denyinviteduser}" />
+			</http:response-validator>
+		</http:request>
+		</until-successful>
+		<set-variable value="#[attributes.statusCode]" doc:name="Set httpstatusCode" doc:id="95187728-8fcd-40a5-9e62-41c376ad0cb1" variableName="httpstatusCode"/>
+		<logger level="INFO" doc:name=" Logger for After invoking C360 Mule System API for Deny User" doc:id="9816c24a-fded-479a-9d38-2dd3d333883b" message="#[vars.logger]||#[vars.uniqueIdVar]:#[payload.payload.New__c]||Response payload from Admin api C360||#[payload]||"/>
+		<choice doc:name="UserChoice" doc:id="f423cde3-7b3a-4db4-9d22-051d66b307a5" >
+			<when expression="#[vars.httpstatusCode != 201 or vars.httpstatusCode != 200]" >
+				<ee:transform doc:name="SMTP request Transform Message" doc:id="cb0e6235-c05e-4756-a96e-6fb1e8058bbd" >
+					<ee:message />
+					<ee:variables >
+						<ee:set-variable variableName="EmailPaylaodvar" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+"Error": payload
+}]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<async doc:name="Async" doc:id="172c7f40-e414-453b-91db-baeebbbc7435" >
+					<email:send doc:name="DenyEmailSMTP" doc:id="dfb98950-8944-4b90-87a4-4bdc3f6e9c41" config-ref="Email_Config" fromAddress="#[p('secure::smtp.from')]" subject="#[p('secure::smtp.subject')]" toAddresses="#[p('secure::smtp.to') splitBy (',')]" >
+						<email:body contentType="text/plain" encoding="UTF-8" />
+						<email:attachments ><![CDATA[#[{  
+  'Error Response' : payload,
+  'Deny User Payload' : vars.UserReqPaylaodVar
+}]]]></email:attachments>
+					</email:send>
+				</async>
+				<logger level="INFO" doc:name="DenyEndErrorLogger" doc:id="dfa551d9-efdd-4c90-9d58-247f643d8114" message="#[vars.logger]||#[vars.uniqueIdVar]:#[payload.payload.New__c]||Completed||Error||" />
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Success Transform Message" doc:id="b5d41e3f-aeff-422e-b421-ae1fdfe4a60c" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="DenyEndSuccessLogger" doc:id="736d2fd8-56e9-4961-a6c1-42511dd29f06" message="#[vars.logger]||#[vars.uniqueIdVar]:#[payload.payload.New__c]||Completed||Success||" />
+			</otherwise>
+		</choice>	
+	</sub-flow>
+
+	<flow name="UserDataC360Flow" doc:id="924a7bf5-17a3-42ca-af33-e87b7e0b030b" >
+		<set-variable value="#[payload.payload.New__c]" doc:name="Extracing New__c from payload" doc:id="420fe067-baa6-4c13-b9e7-b29679eaff0c" variableName="New__c" />
+		<logger level="INFO" doc:name="UserDataLoggerStarted" doc:id="281ee225-95c4-4c78-aaff-614a24f2ae3a" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Request Received #[payload]||"/>
+		<set-variable value="#[attributes.requestUri]" doc:name="Store TransactionId" doc:id="18a17ea8-d78f-41b0-88fb-b0306c6cd10d" variableName="transactionId" />
+		<logger level="INFO" doc:name="Logger Before Invoking Mule SalesForceQuery  API" doc:id="592ed5bc-d142-4a05-b50f-e86b149aa27f" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Before Invoking SalesForceQuery API SalesForceQueryCase = ${secure::SalesForceproxyapi.userchange.path}||"/>
+		<until-successful maxRetries="${secure::mule.http.reconnection.retry}" doc:name="Untill Successfull" doc:id="9c27e512-6bdf-48ec-bbff-47822b60db31" millisBetweenRetries="${secure::mule.http.reconnection.ms}">
+					<http:request method="GET" doc:name="Invoke Salesforce Mule Proxy API for Userchange" doc:id="0d4a386d-58d4-41bb-8d5c-ddc64b352ecd" config-ref="SalesforceQueryCase_Request_configuration" path="${secure::SalesForceproxyapi.userchange.path}" sendBodyMode="NEVER" responseTimeout="${secure::http.mule.sys.sfdc.responsetimeout}">
+						<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"inputuserchangeid" : vars.New__c
+}]]]></http:uri-params>
+						<http:response-validator>
+							<http:success-status-code-validator values="${secure::http.mule.sys.sfdc.responsevalidator}" />
+						</http:response-validator>
+					</http:request>
+				</until-successful>
+		<set-variable value="#[payload]" doc:name="C360 user data" doc:id="b6e86a04-e7ca-4465-b2e7-66837b589674" variableName="c360userdata" />
+		<set-variable value="#[payload]" doc:name="SFDC Response" doc:id="59f83643-6563-4088-ac5d-4fb2ce554f6b" variableName="sfdc_response" />
+		<logger level="WARN" doc:name="Response Received FromSalesForceQuery API" doc:id="2abfa26c-09f2-463f-8bf3-85307c120e65" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Response Received From SalesForceQuery API #[vars.c360userdata]||" />
+		<ee:transform doc:name="Map recordType and EnterpriseStatus" doc:id="127b9165-0cb8-4d40-a973-cca72790a4db" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="recordType" ><![CDATA[%dw 2.0
+output application/java
+---
+vars.c360userdata[0].Account.RecordType.Name]]></ee:set-variable>
+				<ee:set-variable variableName="enterprise_permission_status" ><![CDATA[%dw 2.0
+output application/java
+---
+vars.sfdc_response[0].Enterprise_Permission_Status__c]]></ee:set-variable>
+				<ee:set-variable variableName="orderSubmissionFlag" ><![CDATA[output application/json
+var inp = flatten(payload.Contact_Permission__r.records) 
+---
+if (payload.Contact_Permission__r.records != null )
+    sizeOf(inp filter ($.Contact_MCN_Permissions__c != null) and ($.Contact_MCN_Permissions__c contains "OrderSubmission") map (r, indexr) -> {
+		    Contact_MCN_Permissions__c: r.Contact_MCN_Permissions__c 
+        }) > 0
+    else false]]></ee:set-variable>
+			
+</ee:variables>
+		</ee:transform>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="8b82774c-22f1-4db9-88a1-6c7577577722">
+			<route>
+				<logger level="INFO" doc:name="Inside C360 flow" doc:id="560bc7f6-7016-4694-819d-3d57c86aa5f9" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Inside C360 flow||" />
+				<ee:transform doc:name="Map app when Operation is not Edit" doc:id="47cc3dd5-c60a-456b-aff3-aa9c55510ca2">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="app"><![CDATA[%dw 2.0
+output application/json
+
+var baseApps = [
+    { app_name: "AEM", profile_id_in_app: null, },
+    { app_name: "ELOQUA", profile_id_in_app: null },
+    { app_name: "FNO", profile_id_in_app: null },
+    { app_name: "LMS", profile_id_in_app: null },
+    { app_name: "WORDPRESS", profile_id_in_app: null }
+]
+
+var sfdcApp =
+if (
+    (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+    [ { app_name: "SFDC", profile_id_in_app: payload[0].Id } ]
+else [ ] 
+
+var customerhubApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Customer')
+    and (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+    [ { app_name: "CUSTOMERHUB", profile_id_in_app: payload[0].Id, is_landing_app: true } ]
+else [ ] 
+
+var partnerhubApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+    and (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+    [ { app_name: "PARTNERHUB", profile_id_in_app: payload[0].Id, is_landing_app: true } ]
+else [ ] 
+
+var partnercentralApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+    and (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+     [ { app_name: "PARTNERCENTRAL", profile_id_in_app: null } ]
+else if (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+     [ { app_name: "PARTNERCENTRAL", profile_id_in_app: null, is_landing_app: true } ]
+else [ ] 
+
+
+var occApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+    and (upper(vars.sfdc_response[0].Account.Partner_Region__c) != "NAMR")
+    and (upper(vars.sfdc_response[0].Account.ROW_OCC_Experience_Enabled__c) == "FALSE")
+)
+    [ ] 
+else if 
+(
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+    and (upper(vars.sfdc_response[0].Account.Partner_Region__c) != "NAMR")
+    and (upper(vars.sfdc_response[0].Account.ROW_OCC_Experience_Enabled__c) == "TRUE")
+	and (upper(vars.orderSubmissionFlag) != "TRUE")
+)
+    [ ]
+else
+    [ { app_name: "OCC", profile_id_in_app: null } ]
+
+var myviewApp =
+if (vars.c360userdata[0].Contact_Permission__r != null) 
+    [ { app_name: "MyView", profile_id_in_app: null } ]
+else [ ] 
+
+---
+baseApps ++ sfdcApp ++ customerhubApp ++ partnerhubApp ++ partnercentralApp ++ occApp ++ myviewApp]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<set-variable value="#[vars.c360userdata[0].LDAP_Login__c]" doc:name="extracting login_id value" doc:id="498bc97e-d73f-4d2a-af10-7bc59336187f" variableName="login_id" />
+				<ee:transform doc:name="Creating 360 API data" doc:id="0b8df511-a761-4dd5-8ce2-485c5cc8451b">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var moto = vars.matched
+var inp= flatten(vars.c360userdata[0].Contact_Permission__r.records)
+---
+{
+	email: vars.c360userdata[0].Email,
+	first_name: vars.c360userdata[0].FirstName,
+	last_name: vars.c360userdata[0].LastName,
+	country_iso: vars.c360userdata[0].MailingCountryCode,
+	creation_source: "SFDC",
+	is_support_validated: if (vars.c360userdata[0].Contact_Permission__r == null) false else true,
+	is_email_validated: true,	
+	user_type: if (vars.c360userdata[0].Account.RecordType.Name == "Partner" ) "PARTNER" else if (vars.c360userdata[0].Account.RecordType.Name == "Customer") "DIRECT" else "",
+	"mot_prm_partner_flag": "P",
+	phone_number: if (vars.c360userdata[0].MobilePhone == null or vars.c360userdata[0].MobilePhone == "") 
+			vars.c360userdata[0].Phone 
+			else vars.c360userdata[0].MobilePhone,
+	phone_type: if(vars.c360userdata[0].MobilePhone == null or vars.c360userdata[0].MobilePhone == "") "WORK"
+    		else "MOBILE",
+	company_name: vars.c360userdata[0].Account.Name,
+	user_tags: upper(vars.c360userdata[0].Source_Code__c) splitBy(';') default [],
+	user_status: "ACTIVE",
+	(apps: vars.app default []),
+    enterprises : if (vars.c360userdata[0].Contact_Permission__r == null) []
+	    else(flatten(vars.c360userdata[0].Contact_Permission__r.records) distinctBy $.Parent_Id__c map (row, ind) -> {
+		 
+        "enterprise_source_ref" : row.Parent_Id__c,
+        "customers": 
+        inp filter ($.Parent_Id__c == row.Parent_Id__c) map (r, indexr) -> {
+            "customer_number" : r.Motorola_Customer_Number__c,
+            "user_customer_permissions" : r.Contact_MCN_Permissions__c splitBy(';') default []
+        }
+    })
+   
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<flow-ref doc:name="Call UserdataToC360 Sub Flow" doc:id="7257a490-4659-42e0-89a2-11d95799a82b" name="InvokingUserdataTo360APISub_Flow" />
+			</route>
+			<route>
+			  <choice doc:name="Check For Record Type" doc:id="6cb24bd6-789b-4b49-ac5e-d6c969ddc701">
+				 <when expression='#[vars.recordType == "Partner"]'>
+				   <logger level="INFO" doc:name="Inside Ldap flow" doc:id="3bf3a2df-d4b2-4d33-94a8-78a0d05d6575" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Inside Ldap flow||" />
+			       <logger level="INFO" doc:name="Log SF Query" doc:id="b51acf4c-589f-4b73-ad98-8766abfa1590" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN LDAP FLOW - Before Invoking SalesForceQuery API and LDAP SalesForceQueryCase = ${secure::SalesForceproxyapi.userchangeldap.path}||"/>
+				  <until-successful maxRetries="${secure::mule.http.reconnection.retry}" doc:name="Untill Successfull" doc:id="e915e3e8-3891-448a-acb7-c46030698ff1" millisBetweenRetries="${secure::mule.http.reconnection.ms}">
+					<http:request method="GET" doc:name="Invoke Salesforce Mule Proxy API for LDAP User change" doc:id="b531e936-bea4-4fab-9a67-5c264856911c" config-ref="SalesforceQueryCase_Request_configuration" path="${secure::SalesForceproxyapi.userchangeldap.path}" sendBodyMode="NEVER" responseTimeout="${secure::http.mule.sys.sfdc.responsetimeout}">
+						<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"inputuserchangeldapid" : vars.c360userdata[0].AccountId
+}]]]></http:uri-params>
+						<http:response-validator>
+							<http:success-status-code-validator values="${secure::http.mule.sys.sfdc.responsevalidator}" />
+						</http:response-validator>
+					</http:request>
+				</until-successful>
+				<ee:transform doc:name="Response from SF Query" doc:id="3d2ac367-f1cb-40f1-8085-d78d382293fd">
+					<ee:message />
+					<ee:variables>
+						<ee:set-variable variableName="ldapuserdata"><![CDATA[%dw 2.0
+output application/json
+import * from dw::core::Objects
+ 
+fun mappingObject(data) = if((data is Object) == false) data else
+data mapObject ((value, key, index) -> 
+ value match {
+ case value is Object -> (key) : mappingObject(value)
+ case value is Array -> (key) : value map (mappingObject($))
+ else -> (key) : if(value == null) "" else value
+ }
+)
+ 
+---
+mappingObject(payload)]]></ee:set-variable>
+						<ee:set-variable variableName="url_var"><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::ldap.host') ++ p('secure::ldap.port') ++ p('secure::ldap.path')]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Log SF Query Response" doc:id="fdf96511-0c94-4424-b67f-012633e9021b" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN LDAP FLOW - Response Received From SalesForceQuery API #[vars.ldapuserdata]||" />
+				<ee:transform doc:name="Ldap SOAP Request" doc:id="50434d37-115b-41fa-ae63-fe1a0b8c671c">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+ns soapenv http://schemas.xmlsoap.org/soap/envelope/
+ns urn urn:oasis:names:tc:DSML:2:0:core
+output application/xml
+---
+{
+	soapenv#Envelope: {
+		soapenv#Header: urn#soapAuthenticationHeader: {
+			urn#Username: p('secure::ldap.request.username'),
+			urn#Password: p('secure::ldap.request.password')
+		},
+		soapenv#Body: {
+			urn#batchRequest  @("requestID": "prm123"): {
+				urn#modifyRequest  @("requestID": vars.c360userdata[0].LDAP_Login__c ,"dn": "ou=aa,ou=people,ou=extranet,dc=motorola,dc=com" ) : {
+					urn#modification @("name": "motprmempowertag", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Tag__c
+					},
+					urn#modification @("name": "motprmempowerprimaryrole", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Primary_Contact_Type__c
+					},
+					urn#modification @("name": "motprmempowersecondaryrole", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Contact_Type__c
+					},
+					urn#modification @("name": "motprmreportmanager", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].LMS_Report_Admin__c
+					},
+					urn#modification @("name": "motprmhqcountry", "operation": "replace"): {
+						urn#value: if (vars.c360userdata[0].Partner_Location__r == null or vars.c360userdata[0].Partner_Location__r == "") "" else vars.c360userdata[0].Partner_Location__r.Country_Code__c
+					},
+					urn#modification @("name": "motprmregion", "operation": "replace"): {
+						urn#value: if (vars.c360userdata[0].Account.Partner_Region__c == 'NAMR') "NA" else vars.c360userdata[0].Account.Partner_Region__c
+					},
+					urn#modification @("name": "motprmpartnermembershipid", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Account.Partner_Membership_Id__c
+					},
+					urn#modification @("name": "motprmcofnumber", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Account.Motorola_Customer_Number__c
+					},
+					urn#modification @("name": "motprmpartnerflag", "operation": "replace"): {
+						urn#value: "P"
+					},
+					urn#modification @("name": "motprmempowertechspec", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization__c == null or vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization__c == "") "" else vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization__c joinBy ","
+					},
+					urn#modification @("name": "Motprmempowertechsubsegcom", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Technology_Specializations__r.records.Comm_TechSeg_SubSeg_Specialist__c == null or vars.ldapuserdata[0].Technology_Specializations__r.records.Comm_TechSeg_SubSeg_Specialist__c == "") "" else vars.ldapuserdata[0].Technology_Specializations__r.records.Comm_TechSeg_SubSeg_Specialist__c joinBy ","
+					},
+					urn#modification @("name": "motprmempowertechspeclevel", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization_Level__c == null or vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization_Level__c == "") "" else vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization_Level__c joinBy ","
+					},
+					urn#modification @("name": "motprmcompanystatus", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Partner_Types__r.records.Status__c == null or vars.ldapuserdata[0].Partner_Types__r.records.Status__c == "") "" else vars.ldapuserdata[0].Partner_Types__r.records.Status__c joinBy ","
+					},
+					urn#modification @("name": "motprmempowerprogram", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Partner_Types__r.records.Program__c == null or vars.ldapuserdata[0].Partner_Types__r.records.Program__c == "") "" else vars.ldapuserdata[0].Partner_Types__r.records.Program__c joinBy ","
+					},
+					urn#modification @("name": "motprmempowertrack", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Technology_Specializations__r.records.Community_Type__c == null or vars.ldapuserdata[0].Technology_Specializations__r.records.Community_Type__c == "") "" else vars.ldapuserdata[0].Technology_Specializations__r.records.Community_Type__c joinBy ","
+					},
+					urn#modification @("name": "motprmempowerlevel", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization_Level__c == null or vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization_Level__c == "") "" else vars.ldapuserdata[0].Technology_Specializations__r.records.Technology_Specialization_Level__c joinBy ","
+					},
+					urn#modification @("name": "motprmempowermarketterm", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Technology_Specializations__r.records.Market_Term__c == null or vars.ldapuserdata[0].Technology_Specializations__r.records.Market_Term__c == "") "" else vars.ldapuserdata[0].Technology_Specializations__r.records.Market_Term__c joinBy ","
+					},
+					urn#modification @("name": "motprmpurchasingmethod", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Partner_Types__r.records.Purchasing_Method__c == null or vars.ldapuserdata[0].Partner_Types__r.records.Purchasing_Method__c == "") "" else vars.ldapuserdata[0].Partner_Types__r.records.Purchasing_Method__c joinBy ","
+					},
+					urn#modification @("name": "motprmpartnerempowerprogramstatus", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Account.MPE_Program_Status__c
+					},
+					urn#modification @("name": "motprmmarketspecialization", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Market_Specializations__r == null or vars.ldapuserdata[0].Market_Specializations__r == "") "" else vars.ldapuserdata[0].Market_Specializations__r.records.Market_Specialization__c joinBy ","
+					},
+					urn#modification @("name": "motprmpartnertype", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Account.Partner_Relationships__c
+					},
+					urn#modification @("name": "motprmmarketspeclevel", "operation": "replace"): {
+						urn#value: if (vars.ldapuserdata[0].Market_Specializations__r.records.Market_Specialization_Level__c == null or vars.ldapuserdata[0].Market_Specializations__r.records.Market_Specialization_Level__c == "") "" else vars.ldapuserdata[0].Market_Specializations__r.records.Market_Specialization_Level__c joinBy ","
+					},
+					urn#modification @("name": "motprmerpsoldto", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Account.AccountNumber
+					},
+					urn#modification @("name": "motprmempowermetallevel", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Account.Metal_Level__c
+					},
+					urn#modification @("name": "motprmservicespeclevel", "operation": "replace"): {
+						urn#value: vars.c360userdata[0].Account.Service_Specialization_Level__c
+					},
+					urn#modification @("name": "motprmsfdcuser", "operation": "replace"): {
+						urn#value: "Y"
+					},
+					urn#modification @("name": "motprmempowersfdcadminflag", "operation": "replace"): {
+						urn#value: "Y"
+					},
+					urn#modification @("name": "motprmempowertechsubseglevel", "operation": "replace"): {
+						urn#value: (if(vars.ldapuserdata[0].Partner_Region__c == 'EMEA' and vars.ldapuserdata[0].Technology_SubSegments__r.records.Specialization_Level__c !="" or vars.ldapuserdata[0].Technology_SubSegments__r.records.Specialization_Level__c !=null) vars.ldapuserdata[0].Technology_SubSegments__r.records.Specialization_Level__c joinBy "," else "")  default ""
+					},
+					urn#modification @("name": "motprmempowertechsubSeg", "operation": "replace"): {
+						urn#value: (if(vars.ldapuserdata[0].Partner_Region__c != 'EMEA' and vars.ldapuserdata[0].Technology_Specializations__r.records.TechnologySubSegment__c !="" or vars.ldapuserdata[0].Technology_Specializations__r.records.TechnologySubSegment__c !=null) vars.ldapuserdata[0].Technology_Specializations__r.records.TechnologySubSegment__c joinBy "," else "") default ""
+					},
+					urn#modification @("name": "motoprmpreferreddistributor", "operation": "replace"): {
+						urn#value: (if (vars.ldapuserdata[0].Partner_Region__c == 'EMEA' and vars.ldapuserdata[0].PartnerStatus_Radio__c == 'Active' and vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c !="" or vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c !=null) vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c joinBy "," else vars.c360userdata[0].Account.Primary_Distributor__c) default ""
+					},
+					urn#modification @("name": "motoprmsalesregion", "operation": "replace"): {
+						urn#value: (if (vars.ldapuserdata[0].Partner_Region__c == 'EMEA' and vars.ldapuserdata[0].PartnerStatus_Radio__c == 'Active' and vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c !="" or vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c !=null) vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c joinBy "," else vars.ldapuserdata[0].Technology_Specializations__r.records.Region__c) default ""
+					},
+					urn#modification @("name": "motoprmsalescountry", "operation": "replace"): {
+						urn#value: (if (vars.ldapuserdata[0].Partner_Region__c == 'EMEA' and vars.ldapuserdata[0].PartnerStatus_Radio__c == 'Active' and vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c !="" or vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c !=null) vars.ldapuserdata[0].Technology_Specializations__r.records.Country__c joinBy "," else "") default ""
+					}
+				}
+			}
+		}
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="Log Ldap Request" doc:id="29548f31-01d8-41dd-8730-4600e069196f" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN LDAP FLOW - RequestUrl: #[vars.url_var] Request Payload for Ldap:#[payload]||" />
+				<http:request method="POST" doc:name="Invoke Ldap Auth API" doc:id="de3f2203-f70a-49ee-92a7-692db3873d08" config-ref="Ldap_Request_Config_Auth" path="${secure::ldap.path}">
+					<http:headers ><![CDATA[#[output application/java
+---
+{
+	"Content-Type" : "application/soap+xml"
+}]]]></http:headers>
+				</http:request>
+				<set-variable value="#[attributes.statusCode]" doc:name="Ldap Status Code" doc:id="440b4f60-02be-4c00-929f-2e0ce9a74e2a" variableName="ldaphttpstatuscode"/>
+				<logger level="INFO" doc:name="Response from Ldap" doc:id="43832d78-48d3-4137-8819-611c8750e9d9" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN LDAP FLOW - Response from Ldap: status=#[attributes.statusCode]||Completed||Success||" />
+		      </when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger for Do Nothing" doc:id="072fab09-7f69-43fc-8547-fdfc737167ab" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.c360userdata.records[0].Account.RecordType.Name]||IN USER CHANGE FLOW - LDAP flow will not triggered as the recordType is not Patner||"/>
+					</otherwise>
+				</choice>
+			</route>
+		</scatter-gather>
+		<!-- <choice doc:name="CheckEnterpriseAccountIDIsExists" doc:id="d3cafc5c-3716-4aca-8afe-6001b135f5fc">
+					<when expression="#[payload == null]">
+						<logger level="INFO" doc:name="Logger" doc:id="45a9782b-79ed-419d-b6de-310c52153699" message="#[payload]" />
+						<set-payload value="#[vars.UserReqPaylaodVar]" doc:name="Set Payload" doc:id="abf82525-5573-41c4-a1c0-4097c9df3766" mimeType="application/json"/>
+						<logger level="INFO" doc:name="Logger" doc:id="ac8a7233-c7e1-4789-b182-76cf76ae1b32" message="#[payload]" />
+						<set-variable value="yes" doc:name="PartnerQueryVar" doc:id="8913e310-0fb5-4126-a124-a15d3d4a4ed9" variableName="PartnerQueryVar" />
+						<flow-ref doc:name="CallParentDataToC360Sub_Flow" doc:id="6d230823-6a4d-4d6a-ae1d-d79215fd1d5d" name="PartnerDataToC360Flow" />
+					</when>
+					<otherwise>
+						<logger level="INFO" doc:name="Logger" doc:id="6edc0135-260b-4169-9b63-3d06e3231a3c" message="#[payload]" />
+				<logger level="INFO" doc:name="LoggerBeforeC360DB" doc:id="516dcbb6-d024-4d9b-89ff-b8aa7bc4cda6" message="#[payload]" />
+				<db:select doc:name="Select" doc:id="6fe9285b-6cc3-43b9-b919-22cde9dcf1c1" config-ref="Database_C360_Configuration">
+			<db:sql>${secure::c360.AccountQuery}</db:sql>
+		</db:select>
+				<logger level="INFO" doc:name="LoggerAfterC360DB" doc:id="230277b5-3928-4994-9ba6-f017fff467d9" message="payload" />
+					</otherwise>
+				</choice> -->
+		<choice doc:name="Route based on Http Status Code" doc:id="24614171-6762-4fcd-b1b5-5b400f711c55">
+			<when expression='#[vars.httpstatusCode == 201 and vars.ldaphttpstatuscode == 200 and vars.enterprise_permission_status != "Completed" and vars.recordType == "Partner"]'>
+				<ee:transform doc:name="ReqPayload Update Success Status in SFDC" doc:id="4988631e-6e0a-4524-a9fc-ac5e3f6862ca">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+						<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Enterprise_Permission_Status__c " : "Completed",
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : "Success"
+}]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Log Request payload" doc:id="0db927ff-879a-457b-903d-9d2706eaa737" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW -Invoke SFDC API to Update Success Status in Contact Request URI: #[vars.url_var] and #[vars.update_status_contact] for Patner profile||"/>
+				<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="6ac39f47-bcc3-4d7b-a2d2-b83074c92dd8" name="SFDCPatchContactSub_Flow" />
+				<logger level="INFO" doc:name="Log SFDC Response" doc:id="7ea8702d-be69-4e4e-8857-c85949b49c98" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Response from SFDC API =  #[vars.sfdc_updatestatus_response] for Patner profile||" />
+			</when>
+			<when expression='#[vars.httpstatusCode == 201 and vars.ldaphttpstatuscode == 200 and vars.enterprise_permission_status == "Completed" and vars.recordType == "Partner"]'>
+				<logger level="INFO" doc:name="Logger for Do Nothing" doc:id="fd6e490b-6ad6-4170-90bb-803f109731d5" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - SFDC Already updated with Enterprise_Permission_Status Completed for Patner profile||"/>
+			</when>
+			<when expression='#[vars.httpstatusCode == 201 and vars.recordType != "Partner" and vars.enterprise_permission_status != "Completed"]'>
+				<ee:transform doc:name="ReqPayload Update Success Status in SFDC" doc:id="ec2cb806-95ac-4bbb-9a76-44f67d2075a6">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+						<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Enterprise_Permission_Status__c " : "Completed",
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : "Success"
+}]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Log Request payload" doc:id="cd81bc61-1877-488e-9f89-fc0714245f7c" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW -Invoke SFDC API to Update Success Status in Contact Request URI: #[vars.url_var] and #[vars.update_status_contact] for Consumer profile||"/>
+				<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="2ac9e053-717f-40af-bfb6-5b6c2a29f897" name="SFDCPatchContactSub_Flow" />
+				<logger level="INFO" doc:name="Log SFDC Response" doc:id="89a9dd4f-451b-45cf-9ad3-2d379a1749aa" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Response from SFDC API =  #[vars.sfdc_updatestatus_response] for Consumer profile||" />
+			</when>
+			<when expression='#[vars.httpstatusCode == 201 and vars.enterprise_permission_status == "Completed" and vars.recordType != "Partner"]'>
+				<logger level="INFO" doc:name="Logger for Do Nothing" doc:id="0b7b1ee2-fbb9-4e86-867d-564f91a35d03" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - SFDC Already updated with Enterprise_Permission_Status Completed for Consumer profile||"/>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="ReqPayload Update Error Status in SFDC" doc:id="2f2b4e1c-8336-4012-94bb-746e57863f69">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+						<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : write(vars.EmailPaylaodvar, "application/json")
+}]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Log Request Payload" doc:id="a312c5e0-0dac-450d-b89c-db57c6f40c70" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Invoke SFDC API to Update Error Status in Contact Request URI: #[vars.url_var] and #[vars.update_status_contact]||"/>
+				<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="fc847992-af1e-42d8-a786-ae152d86fbd7" name="SFDCPatchContactSub_Flow"/>
+				<logger level="INFO" doc:name="Log SFDC Response" doc:id="3dd427cb-9b3b-45f5-9950-f9cd36402725" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Response from SFDC API =  #[vars.sfdc_updatestatus_response]||" />
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="99256e20-13f3-4a5d-9cac-653814e66349" >
+				<logger level="INFO" doc:name="Inside Exception Handling Block" doc:id="6b0c49dd-7fed-44b3-89e1-9beed0535ac1" message="#[vars.logger]||Inside Exception Block||"/>
+				<async doc:name="Async" doc:id="337faef8-c8ef-47ce-b6c7-aa34240fe145" maxConcurrency="${secure::er.async.max}">
+					<logger level="INFO" doc:name="Publishing Error Events" doc:id="e7599a1f-ea85-4d84-8419-0cd72874678c" message="#[vars.logger]||Publishing Error Events||"/>
+					<ee:transform doc:name="Set Error Payload" doc:id="61d77640-56b4-4aed-9f9c-acef70418d1e">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ErrorMessage: {
+		UniqueQualifier: p('secure::er.uniq.qualifier.c360'),
+		CustomMessage: p('secure::er.cust.msg.prcs.purecloud.entitlement'),
+		Error: {
+			time: now() as String {format: "dd-MMM-yyyy HH:mm:ss"},
+			error: error.detailedDescription,  
+			errorType: error.errorType.namespace ++ error.errorType.identifier,
+			errorDump: error.detailedDescription ,
+			service: p('secure::UserFlow'),
+			user: p('secure::er.user'),
+			nestedErrorInfo: {
+				time: "1",
+				error: "1",
+				errorType: "1",
+				errorDump: "1",
+				service1: "1",
+				user: "1"
+			}
+		},
+		Module: {
+			ModuleName: p('secure::er.mod.name.c360'),
+			ServiceName: p('secure::UserFlow')
+		},
+		Action: {
+			Email: {
+				SendEmail: p('secure::er.send.email'),
+				DistributionList: p('secure::er.email.list')
+			},
+			Ticket: {
+				CreateTicket: p('secure::er.create.ticket'),
+				Impact: p('secure::er.impact'),
+				Urgency: p('secure::er.urgency') ,
+				SupportTeam: p('secure::er.support.team'),
+				Category: p('secure::er.category'),
+				SubCategory: p('secure::er.sub.category'),
+				CMDBCI: p('secure::er.CMDBCI')
+			}
+		},
+		SuppressDuplicates: {
+			EnableSuppression: p('secure::er.enable.suppression'),
+			Suppress_On_Same_Message: p('secure::er.suppress.on.same.message')
+		}
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<vm:publish doc:name="Publish Error Events" doc:id="97968789-66f0-4d58-9de4-a437480bc5d5" config-ref="ErrorHandler_VM_Config" queueName="ErrorHandlerVMQueue" timeout="${secure::er.vm.timeout}" />
+				</async>
+								<async doc:name="Async" doc:id="62eedbc2-cdf5-46a8-9a1d-ee28abea7caa" >
+					<ee:transform doc:name="Create ErrorPayload" doc:id="69b41510-5af9-4ab4-8976-21a8e1e341fb" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Error": error.detailedDescription,
+	"DateTime": now(),
+	"Http_Status_Code" : attributes.statusCode
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<ee:transform doc:name="ReqPayload Update Error Status in SFDC" doc:id="017529f1-7c4f-4904-bda8-8f79e22c9c69" >
+						<ee:message >
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+							<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : write (payload,"application/json")
+}]]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<logger level="INFO" doc:name="Log Request Payload" doc:id="c64b5c89-5d63-4186-9244-4001c34ce97f" message="vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW ERROR BLOCK - Invoke SFDC API to Update Error Status in Contact - Request URI: #[vars.url_var] and #[vars.update_status_contact] ||" />
+					<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="6f066055-d5a3-41a4-8186-1bb2e38fc51c" name="SFDCPatchContactSub_Flow"/>
+					<logger level="INFO" doc:name="Log SFDC Response" doc:id="77a33021-624c-429c-ab81-2dea2c24d8f0" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW ERROR BLOCK- Response from SFDC API is #[vars.sfdc_updatestatus_response] ||" />
+				</async>
+				<ee:transform doc:name="Set Error Response" doc:id="80087867-81c6-45f7-a114-0512c6f6a156">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Status" : "Internal Server Exception",
+	"Error" : error.errorType.namespace ++ error.errorType.identifier
+}]]]></ee:set-payload>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="httpStatus"><![CDATA[500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Process Completed" doc:id="c00303e4-5aba-479d-b8b7-d40d5a35c66a" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Completed||Error||" />
+			</on-error-propagate>
+		</error-handler>
+</flow>
+
+	<flow name="PartnerDataToC360Flow" doc:id="90b385aa-0cbd-47bd-a15c-9f3c3161327e" >
+		<set-variable value="#[attributes.requestUri]" doc:name="Store TransactionId" doc:id="b51cde2d-4ec9-43b6-b05b-b28d529d3adb" variableName="transactionId" />
+		<logger level="INFO" doc:name="PartnerDataLoggerStarted" doc:id="e1079cd4-c28b-4470-8819-e8a10845c18c" message="#[vars.logger]||#[vars.transactionId]||IN PARTNER FLOW - Request Received From SalesForce - #[payload]||"/>		
+		<set-variable value="#[payload.payload.New__c]" doc:name="Extracting New__c from payload" doc:id="310d3c3a-8f8e-4c04-be59-2bfd90ee45ed" variableName="New__c" />
+		<set-variable value="#[payload.payload.Old__c]" doc:name="Extracting Old__c from payload" doc:id="f8ff9d2c-e029-4858-b5c9-4f1c4dd51987" variableName="Old__c" />
+		<!-- <choice doc:name="Choice" doc:id="08c17f96-bf82-49ae-b024-3065241d32a2" >
+			<when expression='#[((vars.New__c !="" and vars.New__c != null) and (vars.Old__c !="" and vars.Old__c != null))]'>
+				<set-payload value="#[(&quot;(&quot; ++ &quot;'&quot; ++ vars.New__c ++ &quot;'&quot; ++&quot;,&quot; ++ &quot;'&quot; ++ vars.Old__c ++ &quot;'&quot; ++ &quot;)&quot;)]" doc:name="Set Payload" doc:id="78a0014b-217b-47ea-8f0a-dd82fc99623a" />
+			</when>
+			<when expression='#[((vars.New__c !="" and vars.New__c != null) and (vars.Old__c =="" or vars.Old__c == null))]'>
+				<set-payload value="#[(&quot;(&quot; ++ &quot;'&quot; ++ vars.New__c ++ &quot;'&quot; ++ &quot;)&quot;)]" doc:name="Set Payload" doc:id="009b22d9-99a2-4fa1-b41c-b688ae4da10e" />
+			</when>
+			<when expression='#[((vars.New__c =="" or vars.New__c == null) and (vars.Old__c !="" and vars.Old__c != null))]' >
+				<set-payload value="#[(&quot;(&quot; ++ &quot;'&quot; ++ vars.Old__c ++ &quot;'&quot; ++ &quot;)&quot;)]" doc:name="Set Payload" doc:id="92af02f6-9d89-431e-995c-05271a65f543" />
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="fed6768d-b70b-4d4c-963a-472642fb5d7b" />
+			</otherwise>
+		</choice> -->
+		<logger level="INFO" doc:name="BeforeCallingSalesForceLogger" doc:id="e0b13002-f7d6-410b-be18-c52066356db4" message="#[vars.logger]||#[vars.transactionId]||IN PARTNER FLOW - Before Invoking SalesForceQueryCase API - SalesForceQueryCase = ${secure::SalesForceproxyapi.enterprise.path}||]"/>
+		<until-successful maxRetries="${secure::mule.http.reconnection.retry}" doc:name="Untill Successfull" doc:id="7ee6f844-5573-4580-889b-9491c6a7db23" millisBetweenRetries="${secure::mule.http.reconnection.ms}">
+			<http:request method="GET" doc:name="Invoke Salesforce Mule Proxy API for Partner" doc:id="88572229-22bb-4df2-becd-098fc93cd0d5" config-ref="SalesforceQueryCase_Request_configuration" path="${secure::SalesForceproxyapi.enterprise.path}" sendBodyMode="NEVER" responseTimeout="${secure::http.mule.sys.sfdc.responsetimeout}">
+				<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"inputenterpriseid" : vars.New__c
+}]]]></http:uri-params>
+				<http:response-validator >
+					<http:success-status-code-validator values="${secure::http.mule.sys.sfdc.responsevalidator}" />
+				</http:response-validator>
+			</http:request>
+		</until-successful>
+		<logger level="INFO" doc:name="AfterCallingSalesForceLogger" doc:id="7bb01dad-25f0-433f-b655-564218104acf" message="#[vars.logger]||#[vars.transactionId]||IN PARTNER FLOW - AfterInvoking SalesForceQueryCase API - SalesForceQueryCase = #[payload]||]" />
+		<foreach doc:name="For Each" doc:id="51fbefce-bd49-47d5-b734-c277b07d1d36" collection="#[payload]">
+			<set-variable doc:name="MCN_Permissions1__r" doc:id="1e45abc7-1879-4204-a83b-9fab8c6e902f" variableName="MCN_Permissions1__r" value='#[%dw 2.0
+output application/json
+---
+{ 
+	
+		
+		customer: payload.MCN_Permissions1__r.records map (mcn , indexOfmcn) -&gt; {
+			customer_number : mcn.MCN_Account__r.Motorola_Customer_Number__c,
+			customer_enterprise_permissions : mcn.Contact_MCN_Permissions__c splitBy (";") default [],
+            association_type : mcn.Association_Type__c,
+			Parent_Source_Reference : mcn.Parent_Account__c
+			
+	}	
+	
+
+
+}]' />
+			<ee:transform doc:name="Creating 360 API data" doc:id="0af9ccc0-7e4e-414b-8d07-823789ea9235">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{ 
+	
+		enterprise_integration_id : payload.Motorola_Enterprise_ID__c,
+		enterprise_name : payload.Name,			
+		enterprise_type : upper(payload.RecordType.Name ++"_ACCOUNT"),
+		enterprise_attributes : 
+		   {
+		   	"metal_level":payload.Metal_Level__c,
+			technology_specialization: payload.Technology_Specializations__r.records map ( record , indexOfRecord ) -> {
+		community: record.Community_Type__c,
+		specalisation_type: record.Type__c,
+		technology_segment: record.Technology_Specialization__c,
+		engagement_level: record.Technology_Specialization_Level__c,
+		status: record.Technology_Specialization_Status__c		
+		} default [],
+		partner_identifiers: payload.Partner_Identifiers__r.records map ( record01 , indexOfRecord01 ) -> {
+		id_number: record01.ID_Number__c,
+		id_type: record01.ID_Type__c		
+		} default []
+		},
+		customers: if (vars.MCN_Permissions1__r.customer == null ) []
+		else  [vars.MCN_Permissions1__r.customer] flatMap (value, index) -> value
+}]]></ee:set-payload>
+			</ee:message>
+			<ee:variables >
+					<ee:set-variable variableName="sfdc_id" ><![CDATA[%dw 2.0
+output application/java
+---
+payload.Id]]></ee:set-variable>
+				</ee:variables>
+				
+		</ee:transform>
+			<set-variable value="#['http://' ++ p('secure::implementation.host') ++ ':' ++ p('secure::implementation.port') ++ '/' ++ p('secure::implementation.path') ++ '/' ++ p('secure::partnerenterprise.basepath')]" doc:name="URLvar" doc:id="abb7b877-7256-4428-9eda-fc74d839e4c8" variableName="URLvar" />
+			<logger level="INFO" doc:name="Logger Request to C360" doc:id="91feb26d-85c9-4c7b-8eee-3745f94d4993" message="#[vars.logger]||#[vars.transactionId]||IN PARTNER FLOW - Before Invoking Partner Data C360 API #[payload]||]" />
+			<http:request method="PUT" doc:name="Call C360 Mule System API" doc:id="edcd3fd2-af7d-4d23-8254-387ae74d612c" config-ref="HTTP_Mule_Request_Configuration" path="${secure::partnerenterprise.basepath}" responseTimeout="${secure::http.mule.sys.c360.responsetimeout.partner}">
+				<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	sfdc_id : vars.sfdc_id
+}]]]></http:uri-params>
+				<http:response-validator>
+					<http:success-status-code-validator values="${secure::http.mule.sys.c360.responsevalidator.partner}" />
+				</http:response-validator>
+			</http:request>
+			<set-variable value="#[now()]" doc:name="Set System Date" doc:id="5f3956b0-5715-418a-bb0a-dea131fbcea8" variableName="datetime"/>
+			<logger level="INFO" doc:name="Logger Response from C360" doc:id="93e49cca-4a3b-4262-aab2-2b2dd582507d" message="#[vars.logger]||#[vars.transactionId]||IN PARTNER FLOW - After Invoking Partner Data C360 API #[payload]||" />
+			<set-variable value="#[payload]" doc:name="Set Response from C360 Variable" doc:id="d2c61e6f-5711-4af3-9998-6fdc694fbbe1" variableName="payload" />
+			<set-variable value="#[attributes.statusCode]" doc:name="httpstatusCodeVar" doc:id="71a932ae-881e-4d68-a032-0f3080569e2c" variableName="httpstatusCode" />
+			<choice doc:name="Choice" doc:id="2a53cd85-3430-472e-a632-99cad8686df0">
+			<when expression="#[vars.httpstatusCode != 201]">
+				<ee:transform doc:name="PrepareEmailPayload" doc:id="7528b235-22a8-4c8c-838d-0d9365d33d08">
+			<ee:message>
+			</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="EmailPaylaodvar"><![CDATA[%dw 2.0
+output application/json
+---
+{
+"Error": payload,
+"DateTime": vars.datetime,
+"Http_Status_Code" : vars.httpstatusCode
+}]]></ee:set-variable>
+					</ee:variables>
+		</ee:transform>
+					<async doc:name="Async" doc:id="853220f0-6166-4a51-8a89-d7b8e25deebb" >
+						<email:send doc:name="PartnerEmailSMTP" doc:id="f263ca29-8254-475e-92b6-da198bc7e0ca" config-ref="Email_Config" fromAddress="#[p('secure::smtp.from')]" subject="#[p('secure::smtp.subject')]" toAddresses="#[p('secure::smtp.to') splitBy (',')]" >
+							<email:body contentType="text/plain" encoding="UTF-8" />
+							<email:attachments ><![CDATA[#[{  
+  'Error Response' : payload,
+  'Partner Enterprise Request Payload' : vars.UserReqPaylaodVar
+}]]]></email:attachments>
+						</email:send>
+					</async>
+					<ee:transform doc:name="ReqPayload Update Success Status in SFDC" doc:id="60cc58e7-0038-42a5-907c-5792762335de">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : write(vars.EmailPaylaodvar, "application/json")
+}]]]></ee:set-payload>
+			</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchAccount.path')]]></ee:set-variable>
+						</ee:variables>
+		</ee:transform>
+					<logger level="INFO" doc:name="Log Request payload" doc:id="3dfba3de-19c7-449d-946a-322bfb74da72" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN PARTNER FLOW - Invoke SFDC API to Update Error Status in Contact - Request URI: #[vars.url_var] and payload is #[payload]||" />
+					<flow-ref doc:name="SFDCPatchAccountSub_Flow" doc:id="3e45d699-7a20-4377-b63f-db196d699dce" name="SFDCPatchAccountSub_Flow" />
+					<logger level="INFO" doc:name="Log SFDC Response" doc:id="66395418-e2d9-485c-bb4f-6e13d68135ae" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN PARTNER FLOW - Response from SFDC API is #[payload]||" />
+					<logger level="INFO" doc:name="ErrorCompleteLogger" doc:id="97363a9d-01aa-4e2b-b8df-15bdcadc2d88" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN PARTNER FLOW - Request URI = #[vars.transactionId]||Completed||Error||]" />
+			</when>
+			<otherwise>
+					<ee:transform doc:name="ReqPayload Update Error Status in SFDC" doc:id="7193eade-8c3a-4b9c-a48f-3cfb3eb406a5">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Enterprise_Permission_Status__c " : "Completed",
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : "Success"
+}]]]></ee:set-payload>
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchAccount.path')]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<logger level="INFO" doc:name="Log Request payload" doc:id="25f30544-5437-42c2-b530-c446abf6fd8f" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN PARTNER FLOW - Invoke SFDC API to Update Error Status in Contact - Request URI: #[vars.url_var] and payload is #[payload]||" />
+					<flow-ref doc:name="SFDCPatchAccountSub_Flow" doc:id="5edf9217-d298-439a-a14f-b16debbcc319" name="SFDCPatchAccountSub_Flow" />
+					<logger level="INFO" doc:name="Log SFDC Response" doc:id="8e44f120-5f1b-4415-a516-6f1b9bc827aa" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN PARTNER FLOW - Response from SFDC API is #[payload]||" />
+					<logger level="INFO" doc:name="SuccessCompleteLogger" doc:id="15724292-b7ea-429d-8f7b-8a014e986a64" message="[#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN PARTNER FLOW - Request URI = #[vars.transactionId]||Completed||Success||]" />
+			</otherwise>
+		</choice>
+		</foreach>
+		<ee:transform doc:name="Response from C360" doc:id="f7b28f1a-088c-4be7-ab54-5ec82e9ca153">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+vars.payload]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="3e77c23e-dc74-4186-b00d-6f1c72e1769a" >
+				<logger level="INFO" doc:name="Inside Exception Handling Block" doc:id="5575fe2e-c450-428c-85e6-23a9e7258b99" message="#[vars.logger]||Inside Exception Block||#[payload]"/>
+				<async doc:name="Async" doc:id="cda3c6aa-d3bd-4720-b731-73398bd8d261" maxConcurrency="${secure::er.async.max}">
+					<logger level="INFO" doc:name="Logger Publishing Error Events Before" doc:id="369c7f2d-5fe9-4bc2-a071-44fc60cc5c8b" message="#[vars.logger]||Call Before Publishing Error Events||]"/>
+					<ee:transform doc:name="Set Error Payload" doc:id="9663af38-de30-438a-a57a-da4e1a41ba5d">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ErrorMessage: {
+		UniqueQualifier: p('secure::er.uniq.qualifier.c360'),
+		CustomMessage: p('secure::er.cust.msg.prcs.purecloud.entitlement'),
+		Error: {
+			time: now() as String {format: "dd-MMM-yyyy HH:mm:ss"},
+			error: error.detailedDescription,  
+			errorType: error.errorType.namespace ++ error.errorType.identifier,
+			errorDump: error.detailedDescription ,
+			service: p('secure::PartnerFlow'),
+			user: p('secure::er.user'),
+			nestedErrorInfo: {
+				time: "1",
+				error: "1",
+				errorType: "1",
+				errorDump: "1",
+				service1: "1",
+				user: "1"
+			}
+		},
+		Module: {
+			ModuleName: p('secure::er.mod.name.c360'),
+			ServiceName: p('secure::PartnerFlow')
+		},
+		Action: {
+			Email: {
+				SendEmail: p('secure::er.send.email'),
+				DistributionList: p('secure::er.email.list')
+			},
+			Ticket: {
+				CreateTicket: p('secure::er.create.ticket'),
+				Impact: p('secure::er.impact'),
+				Urgency: p('secure::er.urgency') ,
+				SupportTeam: p('secure::er.support.team'),
+				Category: p('secure::er.category'),
+				SubCategory: p('secure::er.sub.category'),
+				CMDBCI: p('secure::er.CMDBCI')
+			}
+		},
+		SuppressDuplicates: {
+			EnableSuppression: p('secure::er.enable.suppression'),
+			Suppress_On_Same_Message: p('secure::er.suppress.on.same.message')
+		}
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<logger level="INFO" doc:name="Logger Publishing Error Events After" doc:id="60a5a7a0-796c-4d60-bed5-6e83d3f7ebb9" message="#[vars.logger]||Call After Publishing Error Events||]"/>
+					<vm:publish doc:name="Publish Error Events" doc:id="82c4d0e9-218e-4c50-bba6-7adbdb3d1637" config-ref="ErrorHandler_VM_Config" queueName="ErrorHandlerVMQueue" timeout="${secure::er.vm.timeout}" />
+				</async>
+				<async doc:name="Async" doc:id="173c90b3-1e3d-4501-9af8-22019e84af48">
+					<ee:transform doc:name="Create ErrorPayload" doc:id="af970c18-9378-4cb8-ac24-4df6ce8097a1">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Error": error.detailedDescription,
+	"DateTime": now(),
+	"Http_Status_Code" : attributes.statusCode
+}]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+					<ee:transform doc:name="ReqPayload Update Error Status in SFDC" doc:id="1c84771f-e2fc-4003-a01e-5a19756ad62d" >
+						<ee:message >
+							<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : write(payload, "application/json")
+}]]]></ee:set-payload>
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchAccount.path')]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<logger level="INFO" doc:name="Log Request payload" doc:id="c2fdeaf2-5ac1-4502-a3db-f34ae26d159c" message="#[vars.logger]||${secure::PartnerFlow}||#[vars.uniqueIdVar]:#[vars.New__c]|| Invoke SFDC API to Update Error Status in Contact || Request URI: #[vars.url_var] || #[payload] ||" />
+					<flow-ref doc:name="SFDCPatchAccountSub_Flow" doc:id="8604bf90-e2d7-4eac-a2a8-4a18397b0d4f" name="SFDCPatchAccountSub_Flow"/>
+					<logger level="INFO" doc:name="Log SFDC Response" doc:id="50a935fa-ea9a-4ab6-9e38-f500fc202e59" message="#[vars.logger]||${secure::PartnerFlow}||#[vars.uniqueIdVar]:#[vars.New__c]|| Response from SFDC API || #[payload]||" />
+				</async>
+				<ee:transform doc:name="Set Error Response" doc:id="543dd6a6-0e54-4a43-b88e-648d8e78731a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Status" : "Internal Server Exception",
+	"Error" : error.errorType.namespace ++ error.errorType.identifier
+}]]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatus" ><![CDATA[500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Process Completed" doc:id="025df596-7018-450b-91a3-0722d206e876" message="#[vars.logger]||Completed||Error||]"/>
+			
+</on-error-propagate>
+		</error-handler>
+</flow>
+	<sub-flow name="SFDCPatchContactSub_Flow" doc:id="d83f80d9-31c3-4f83-8d72-32defd867276" >
+		<http:request method="PATCH" doc:name="PATCH: SFDC System SObject Contact" doc:id="ec3110a5-371c-43d2-81e7-fa8742c7d29b" config-ref="SalesforceQueryCase_Request_configuration" path="${secure::SalesForcePatchContact.path}" sendBodyMode="ALWAYS" requestStreamingMode="NEVER" responseTimeout="${secure::SalesForceQuery.response.timeout}" target="sfdc_updatestatus_response">
+					<http:body><![CDATA[#[vars.update_status_contact]]]></http:body>
+				</http:request>
+	</sub-flow>
+	<sub-flow name="SFDCPatchAccountSub_Flow" doc:id="a5bcb3d8-9175-4d55-b511-86b475f3b88f" >
+		<http:request method="PATCH" doc:name="PATCH: SFDC System SObject Account" doc:id="f9511ba9-b911-4f5e-a463-408ee84d0baf" config-ref="SalesforceQueryCase_Request_configuration" path="${secure::SalesForcePatchAccount.path}" sendBodyMode="ALWAYS" requestStreamingMode="NEVER" responseTimeout="${secure::SalesForceQuery.response.timeout}" />
+	</sub-flow>
+	<sub-flow name="InvokingUserdataTo360APISub_Flow" doc:id="912d966d-3ce7-4491-8de1-50e0a793a2ac" >
+		<set-variable value="#['http://' ++ p('secure::implementation.host') ++ ':' ++ p('secure::implementation.port') ++ p('secure::implementation.path') ++ '/' ++ p('secure::userchange.basepath')]" doc:name="URLvar" doc:id="3cf26dc5-3534-47f4-87a4-57e1cd5a0d1d" variableName="URLvar" />
+		<logger level="INFO" doc:name="Logger Before Invoking c360 API" doc:id="aaf117d2-f4db-425c-8f63-5cb39a16dc1a" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW -  Request To c360 is #[payload]||" />
+		<http:request method="PUT" doc:name="Call C360 Mule System API" doc:id="8c251922-4a81-4e34-90dc-55fd7ceedc19" config-ref="HTTP_Mule_Request_Configuration" path="${secure::userchange.basepath}" responseTimeout="${secure::http.mule.sys.c360.responsetimeout.userchange}">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"login_id" : vars.login_id
+}]]]></http:uri-params>
+			<http:response-validator>
+				<http:success-status-code-validator values="${secure::http.mule.sys.c360.responsevalidator.userchange}" />
+			</http:response-validator>
+		</http:request>
+		<logger level="INFO" doc:name="Response Received From c360 API" doc:id="639aca5f-9404-4665-8d96-12f8a096e9e3" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN USER CHANGE FLOW - Response Received From c360 API with Status code as #[attributes.statusCode] and payload is #[payload]||" />
+		<set-variable value="#[attributes.statusCode]" doc:name="UserhttpstatusCodeVar" doc:id="6fd5e2ec-0716-466d-93e9-a85d304ee6af" variableName="httpstatusCode" />
+		<choice doc:name="UserChoice" doc:id="eafae1ac-e57f-46b2-ab61-3058fe2755bf">
+				<when expression='#[vars.httpstatusCode != 201]'>
+					<ee:transform doc:name="SMTP request Transform Message" doc:id="ce08d4c6-c895-46b3-98e6-ebe610ca4af4">
+						<ee:message />
+						<ee:variables>
+							<ee:set-variable variableName="EmailPaylaodvar"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Error": payload,
+	"DateTime": now(),
+	"Http_Status_Code" : vars.InvitedUserhttpstatusCode
+}]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+				<async doc:name="Async" doc:id="84930976-2461-4f5b-b0cd-93a0341c25c4" >
+					<email:send doc:name="UserEmailSMTP" doc:id="db421144-a952-4019-83e7-b84ad2ae2cd8" config-ref="Email_Config" fromAddress="#[p('secure::smtp.from')]" subject="#[p('secure::smtp.subject')]" toAddresses="#[p('secure::smtp.to') splitBy (',')]">
+					<email:body contentType="text/plain" encoding="UTF-8" />
+					<email:attachments><![CDATA[#[{  
+  'Error Response' : payload,
+  'UserChange Request Payload' : vars.UserReqPaylaodVar
+}]]]></email:attachments>
+				</email:send>
+				</async>
+				<logger level="INFO" doc:name="UserEndErrorLogger" doc:id="3b367448-ed3e-41dc-995b-4cbfee345776" message="#[vars.logger]||${secure::UserFlow}||#[vars.uniqueIdVar]:#[vars.New__c]||Completed||Error||" />
+				</when>
+				<otherwise>
+				<ee:transform doc:name="Success Transform Message" doc:id="303f32d5-1b1b-4be7-88a7-8b87c27430cd">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"status":"Data successfully synched from Salesforce to C360"
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="UserEndSuccessLogger" doc:id="732a34fe-8bfa-4296-b46d-d9c3d4f19803" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Completed||Success||" />
+				</otherwise>
+			</choice>
+	</sub-flow>
+	<flow name="InvitedUserDataC360Flow" doc:id="8c748cc2-1942-4758-bbc3-6bee49923ece">
+	<set-variable value="#[payload.payload.New__c]" doc:name="Extracing New__c from payload" doc:id="7487762d-839e-4c75-8edc-e40a0f064182" variableName="New__c" />
+		<logger level="INFO" doc:name="UserDataLoggerStarted" doc:id="bcfafb65-b980-4057-befc-afd91f4f0cbf" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Request Received #[payload]||"/>
+		<set-variable value="#[attributes.requestUri]" doc:name="Store TransactionId" doc:id="08f7844d-01e7-4bb9-81c5-31f96b62bafa" variableName="transactionId" />
+		<logger level="INFO" doc:name="Logger Before Invoking Mule SalesForceQuery  API" doc:id="32c41230-23d6-47aa-b501-41f98143ea75" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Before Invoking SalesForceQuery API and  SalesForceQueryCase = ${secure::SalesForceproxyapi.userchange.path}||"/>
+		<until-successful maxRetries="${secure::mule.http.reconnection.retry}" doc:name="Untill Successfull" doc:id="923353fd-e0d4-49fb-9ecb-c3a293801046" millisBetweenRetries="${secure::mule.http.reconnection.ms}">
+			<http:request method="GET" doc:name="Invoke Salesforce Mule Proxy API for Partner" doc:id="b116aea0-2a67-4f6e-8fbd-db1e867986b5" config-ref="SalesforceQueryCase_Request_configuration" path="${secure::SalesForceproxyapi.userchange.path}" sendBodyMode="NEVER" responseTimeout="${secure::http.mule.sys.sfdc.responsetimeout}">
+				<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"inputuserchangeid" : vars.New__c
+}]]]></http:uri-params>
+				<http:response-validator>
+					<http:success-status-code-validator values="${secure::http.mule.sys.sfdc.responsevalidator}" />
+				</http:response-validator>
+			</http:request>
+		</until-successful>
+		<set-variable value="#[payload]" doc:name="SFDC Response" doc:id="caa141bb-7aeb-4250-8633-6f4364dbc90d" variableName="sfdc_response" />
+		<logger level="INFO" doc:name="Response Received FromSalesForceQuery API" doc:id="507d2f7c-3410-420a-b4c5-e7d1dec6ae7f" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Response Receieved From SalesForceQuery API = #[payload]||" />
+		<ee:transform doc:name="Map app when Operation is not Edit" doc:id="0b25bd9d-ed61-46bd-9eb6-ca6e92775341">
+					<ee:message>
+					</ee:message>
+					<ee:variables>
+						<ee:set-variable variableName="app"><![CDATA[%dw 2.0
+output application/json
+
+var baseApps = [
+    { app_name: "AEM", profile_id_in_app: null, },
+    { app_name: "ELOQUA", profile_id_in_app: null },
+    { app_name: "FNO", profile_id_in_app: null },
+    { app_name: "LMS", profile_id_in_app: null },
+    { app_name: "WORDPRESS", profile_id_in_app: null }
+]
+
+var sfdcApp =
+if (
+    (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+    [ { app_name: "SFDC", profile_id_in_app: payload[0].Id } ]
+else [ ] 
+
+var customerhubApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Customer')
+    and (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+    [ { app_name: "CUSTOMERHUB", profile_id_in_app: payload[0].Id, is_landing_app: true } ]
+else [ ] 
+
+var partnerhubApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+    and (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+    [ { app_name: "PARTNERHUB", profile_id_in_app: payload[0].Id, is_landing_app: true } ]
+else [ ] 
+
+var partnercentralApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+    and (vars.sfdc_response[0].Status__c == "Active")
+    and (upper(vars.sfdc_response[0].Account.Partner_Hub_Enabled__c) == "TRUE")
+)
+     [ { app_name: "PARTNERCENTRAL", profile_id_in_app: null } ]
+else if (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+     [ { app_name: "PARTNERCENTRAL", profile_id_in_app: null, is_landing_app: true } ]
+else [ ] 
+
+
+var occApp =
+if (
+    (vars.sfdc_response[0].Account.RecordType.Name == 'Partner')
+    and (upper(vars.sfdc_response[0].Account.Partner_Region__c) != "NAMR")
+    and (upper(vars.sfdc_response[0].Account.ROW_OCC_Experience_Enabled__c) == "FALSE")
+)
+    [ ] 
+else
+    [ { app_name: "OCC", profile_id_in_app: null } ]
+
+var myviewApp =
+if (vars.c360userdata[0].Contact_Permission__r != null) 
+    [ { app_name: "MyView", profile_id_in_app: null } ]
+else [ ] 
+
+---
+baseApps ++ sfdcApp ++ customerhubApp ++ partnerhubApp ++ partnercentralApp ++ occApp ++ myviewApp]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+		<set-variable value="#[payload[0].LDAP_Login__c]" doc:name="extracting login_id value" doc:id="e068916a-78a6-466a-8a91-29de9f974f82" variableName="login_id" />
+		<ee:transform doc:name="TransformInvitedUserC360InputData" doc:id="02711df4-79da-4c68-aadf-f01c8dbb8397">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="inviteduserc360input"><![CDATA[%dw 2.0
+output application/json
+var moto = vars.matched
+var inp= flatten(payload[0].records.Contact_Permission__r.records)
+---
+{
+    first_name: payload[0].FirstName,
+    last_name: payload[0].LastName,
+    company_name: payload[0].Account.Name,
+    phone_number: if(payload[0].MobilePhone == null or payload[0].MobilePhone == "")
+                     payload[0].Phone
+               else payload[0].MobilePhone,
+    email: payload[0].Email,
+    login_id:vars.login_id,
+    country_iso: payload[0].MailingCountryCode,
+    is_b2b:true,
+    user_customer_permission:[],
+    customer_account_permissions: [],
+    phone_type: if(payload[0].MobilePhone == null or payload[0].MobilePhone == "")
+    		"WORK"
+    		else "MOBILE",
+    path: "/en_us/non-navigational-pages/secure/UserRedirection.html",
+    ecomm: true
+}]]></ee:set-variable>
+				<ee:set-variable variableName="sf_res_payload" ><![CDATA[%dw 2.0
+output application/java
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<flow-ref doc:name="Call Invited User Data to C360 Sub flow" doc:id="17f2cbfe-44a4-4d85-9dde-19c402413fae" name="InvokeInviteUserDataToC360Sub_Flow"/>
+		<set-variable value="#[now()]" doc:name="Set System Date" doc:id="eece1ea5-31b6-4043-b209-5b631e35cf4d" variableName="datetime" />
+		<set-variable value="#[attributes.statusCode]" doc:name="InvitedUserhttpstatusCodeVar" doc:id="38aad627-58a0-4580-9045-ce7c52202def" variableName="InvitedUserhttpstatusCode"/>
+		<choice doc:name="InvitedUserChoice" doc:id="5cc54e72-f703-4584-afe4-f83de4b9b88e">
+				<when expression='#[vars.InvitedUserhttpstatusCode != 200]'>
+					<ee:transform doc:name="SMTP request Transform Message" doc:id="2ca1f43b-8bf6-4eee-8828-6ff33d8dde50">
+						<ee:message >
+					</ee:message>
+						<ee:variables>
+							<ee:set-variable variableName="EmailPaylaodvar"><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"Error": payload,
+	"DateTime": vars.datetime,
+	"Http_Status_Code" : vars.InvitedUserhttpstatusCode
+}]]></ee:set-variable>
+						<ee:set-variable variableName="payload" ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+				<async doc:name="Async" doc:id="95114476-a826-4ca0-b37d-d6a74aa3efaa" >
+					<email:send doc:name="InvitedUserEmailSMTP" doc:id="cecb25e6-7d3b-4ea2-bf4d-a2d6330708e6" config-ref="Email_Config" fromAddress="#[p('secure::smtp.from')]" subject="#[p('secure::smtp.subject')]" toAddresses="#[p('secure::smtp.to') splitBy (',')]">
+					<email:body contentType="text/plain" encoding="UTF-8" >
+							<email:content ><![CDATA[#[vars.inviteduserc360output]]]></email:content>
+						</email:body>
+					<email:attachments><![CDATA[#[{  
+  'Error Response' : payload,
+  'Invited User Request Payload' : vars.UserReqPaylaodVar
+}]]]></email:attachments>
+				</email:send>
+				</async>
+				<ee:transform doc:name="ReqPayload Update Error Status in SFDC" doc:id="9f8b5aad-e57d-4df7-96d7-48581eca1b64">
+					<ee:message>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+						<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : write(vars.EmailPaylaodvar, "application/json")
+}]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Log Request payload" doc:id="b1f5c1de-a28c-47ba-aeb6-b31961c48e50" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Invoke SFDC API to Update Error Status in Contact Request URI: #[vars.url_var] #[vars.update_status_contact]||" />
+				<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="1abf9c3f-af1c-462e-af09-1da55f661150" name="SFDCPatchContactSub_Flow"/>
+				<logger level="INFO" doc:name="Log SFDC Response" doc:id="64bd2886-afcb-4ce1-9da3-ce75a145eb09" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Response from SFDC API =  #[vars.sfdc_updatestatus_response]||" />
+				<logger level="INFO" doc:name="InvitedUserEndErrorLogger" doc:id="c1c5a4c4-e5c9-446e-a178-e33efb3e1a33" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Completed||Error||" />
+				<ee:transform doc:name="Response from C360" doc:id="00eb4822-2841-48e1-8a2c-0eb3e003e6bf" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/java
+---
+vars.payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				</when>
+				<otherwise>
+				<ee:transform doc:name="Success Transform Message" doc:id="4d69d550-1ee2-49db-8944-c587a696ed75">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"status":"Invited User Data successfully synched from Salesforce to C360"
+]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<logger level="INFO" doc:name="InvitedUserEndSuccessLogger" doc:id="4af962c9-8d81-4303-bf73-a8af356a07c0" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Notification Sent Successfully by Admin API||Completed||Success||" />
+				<ee:transform doc:name="Creating 360 API data" doc:id="c5feb549-5e1a-421f-b1e5-cbd861ffd443">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var moto = vars.matched
+var inp= flatten(vars.sf_res_payload[0].Contact_Permission__r.records)
+---
+{
+	email: vars.sf_res_payload[0].Email,
+	first_name: vars.sf_res_payload[0].FirstName,
+	last_name: vars.sf_res_payload[0].LastName,
+	country_iso: vars.sf_res_payload[0].MailingCountryCode,
+	creation_source: "SFDC",
+	is_support_validated: true,
+	is_email_validated: false,	
+	user_type: if (vars.sf_res_payload[0].Account.RecordType.Name == "Partner" ) "PARTNER" else if (vars.sf_res_payload[0].Account.RecordType.Name == "Customer") "DIRECT" else "",
+	"mot_prm_partner_flag": "P",
+	phone_number: if(vars.sf_res_payload[0].MobilePhone == null or vars.sf_res_payload[0].MobilePhone == "")
+                     vars.sf_res_payload[0].Phone
+               	  else vars.sf_res_payload[0].MobilePhone,
+	phone_type: if(vars.sf_res_payload[0].MobilePhone == null or vars.sf_res_payload[0].MobilePhone == "") 
+				"WORK"
+    			else "MOBILE",
+	company_name: vars.sf_res_payload[0].Account.Name,
+	user_tags: upper(vars.sf_res_payload[0].Source_Code__c) splitBy(';') default [],
+	user_status: "ACTIVE",
+	(apps: vars.app default []),
+    enterprises : if (vars.c360userdata[0].Contact_Permission__r == null) []
+    else (flatten(vars.sf_res_payload[0].Contact_Permission__r.records) distinctBy $.Parent_Id__c map (row, ind) -> {
+		 
+        "enterprise_source_ref" : row.Parent_Id__c,
+        "customers": 
+        inp filter ($.Parent_Id__c == row.Parent_Id__c) map (r, indexr) -> {
+            "customer_number" : r.Motorola_Customer_Number__c,
+            "user_customer_permissions" : r.Contact_MCN_Permissions__c splitBy(';') default []
+        }
+    })
+   
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+				<flow-ref doc:name="Call UserdataToC360 Sub Flow" doc:id="69673f60-f28f-454d-b3d3-fce8d4e657cb" name="InvokingUserdataTo360APISub_Flow" />
+				<choice doc:name="UserChoice" doc:id="298e9a98-2c37-47da-91ad-63038f80d8c7" >
+					<when expression="#[vars.httpstatusCode != 201]" >
+						<ee:transform doc:name="ReqPayload Update Error Status in SFDC" doc:id="5477d600-7059-4bf4-b9e6-2f42ce6f978d" >
+							<ee:message >
+							</ee:message>
+							<ee:variables >
+								<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+								<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : write(vars.EmailPaylaodvar, "application/json")
+}]]]></ee:set-variable>
+							</ee:variables>
+						</ee:transform>
+						<logger level="INFO" doc:name="Log Request payload" doc:id="75c359c5-4153-49ce-a326-9e36f46be30d" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Invoke SFDC API to Update Error Status in Contact Request URI: #[vars.url_var] #[vars.update_status_contact]||" />
+						<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="f3ffa084-3f78-4f77-9bb3-a3726423fc91" name="SFDCPatchContactSub_Flow"/>
+						<logger level="INFO" doc:name="Log SFDC Response" doc:id="167b44b5-77ad-4f09-bc61-b3c0a44a4b25" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Response from SFDC API #[vars.sfdc_updatestatus_response]||" />
+						<logger level="INFO" doc:name="UserEndErrorLogger" doc:id="6cf7d364-f146-456e-940f-0b03c206e92c" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Completed||Error||" />
+					</when>
+					<otherwise >
+						<ee:transform doc:name="ReqPayload Update Success Status in SFDC" doc:id="9cd57bc8-e752-433b-8aa7-1859ee0f6cba">
+					<ee:message />
+					<ee:variables>
+						<ee:set-variable variableName="url_var"><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+								<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Enterprise_Permission_Status__c " : "Completed",
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : "Success"
+}]]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+						<logger level="INFO" doc:name="Log Request payload" doc:id="0eb13009-bc56-405e-bda6-60b340941be1" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Invoke SFDC API to Update Success Status in Contact Request URI: #[vars.url_var] #[vars.update_status_contact]||" />
+						<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="1f472aed-2bf0-426b-a12f-f5307bac1885" name="SFDCPatchContactSub_Flow"/>
+						<logger level="INFO" doc:name="Log SFDC Response" doc:id="f7f933db-16df-4326-8b8b-83dc97712f96" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Response from SFDC API #[vars.sfdc_updatestatus_response]||" />
+						<logger level="INFO" doc:name="UserEndSuccessLogger" doc:id="c281695f-577c-46bb-9204-eaa979e721c4" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Completed||Success||" />
+					</otherwise>
+				</choice>
+				</otherwise>
+			</choice>
+		<!-- <choice doc:name="CheckEnterpriseAccountIDIsExists" doc:id="e5e865c5-5e66-4f97-bfae-71a36745f7fb">
+					<when expression="#[payload == null]">
+						<logger level="INFO" doc:name="Logger" doc:id="b786662e-43ba-4470-9566-1358a4338de6" message="#[payload]" />
+						<set-payload value="#[vars.UserReqPaylaodVar]" doc:name="Set Payload" doc:id="c236c446-a9bf-4764-ad80-fa4f562bc611" mimeType="application/json"/>
+						<logger level="INFO" doc:name="Logger" doc:id="7514eee8-f3ff-462a-9343-3cc20bd4e3e8" message="#[payload]" />
+						<set-variable value="yes" doc:name="PartnerQueryVar" doc:id="c814f4fe-0523-4167-8799-89db1d9b6196" variableName="PartnerQueryVar" />
+						<flow-ref doc:name="CallParentDataToC360Sub_Flow" doc:id="94aa064f-959a-4e1c-8d97-299feb1bb6d4" name="PartnerDataToC360Flow" />
+					</when>
+					<otherwise>
+						<logger level="INFO" doc:name="Logger" doc:id="6b0bb10c-e0f1-428e-81e7-1d22086390be" message="#[payload]" />
+				<logger level="INFO" doc:name="LoggerBeforeC360DB" doc:id="fc6b5898-fd10-42f8-b2c0-037fce3066d0" message="#[payload]" />
+				<db:select doc:name="Select" doc:id="e9bfc480-cdd3-46ac-8683-434b9dc13a8f" config-ref="Database_C360_Configuration">
+			<db:sql>${secure::c360.AccountQuery}</db:sql>
+		</db:select>
+				<logger level="INFO" doc:name="LoggerAfterC360DB" doc:id="1c5f4e45-0c51-4a6d-b397-3c9b207b01b3" message="payload" />
+					</otherwise>
+				</choice> -->
+		<error-handler >
+			<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="adc6136b-fcd2-4444-be8c-9600b9c9a7a2" >
+				<logger level="INFO" doc:name="Inside Exception Handling Block" doc:id="884399c9-2b31-424b-94b8-5815509d5a53" message="#[vars.logger]||Inside Exception Block||"/>
+				<async doc:name="Async" doc:id="f0376738-755c-4195-b451-fffda754296e" maxConcurrency="${secure::er.async.max}">
+					<logger level="INFO" doc:name="Publishing Error Events" doc:id="6f2177f9-5f98-44dc-8590-f6a90e915a93" message="#[vars.logger]||Publishing Error Events||"/>
+					<ee:transform doc:name="Set Error Payload" doc:id="bb983fd8-4358-4bcd-bd66-639aea17f33f">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ErrorMessage: {
+		UniqueQualifier: p('secure::er.uniq.qualifier.c360'),
+		CustomMessage: p('secure::er.cust.msg.prcs.purecloud.entitlement'),
+		Error: {
+			time: now() as String {format: "dd-MMM-yyyy HH:mm:ss"},
+			error: error.detailedDescription,  
+			errorType: error.errorType.namespace ++ error.errorType.identifier,
+			errorDump: error.detailedDescription ,
+			service: p('secure::UserFlow'),
+			user: p('secure::er.user'),
+			nestedErrorInfo: {
+				time: "1",
+				error: "1",
+				errorType: "1",
+				errorDump: "1",
+				service1: "1",
+				user: "1"
+			}
+		},
+		Module: {
+			ModuleName: p('secure::er.mod.name.c360'),
+			ServiceName: p('secure::UserFlow')
+		},
+		Action: {
+			Email: {
+				SendEmail: p('secure::er.send.email'),
+				DistributionList: p('secure::er.email.list')
+			},
+			Ticket: {
+				CreateTicket: p('secure::er.create.ticket'),
+				Impact: p('secure::er.impact'),
+				Urgency: p('secure::er.urgency') ,
+				SupportTeam: p('secure::er.support.team'),
+				Category: p('secure::er.category'),
+				SubCategory: p('secure::er.sub.category'),
+				CMDBCI: p('secure::er.CMDBCI')
+			}
+		},
+		SuppressDuplicates: {
+			EnableSuppression: p('secure::er.enable.suppression'),
+			Suppress_On_Same_Message: p('secure::er.suppress.on.same.message')
+		}
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<vm:publish doc:name="Publish Error Events" doc:id="1d6ee430-b3d6-4067-bfd7-ecdeab07899c" config-ref="ErrorHandler_VM_Config" queueName="ErrorHandlerVMQueue" timeout="${secure::er.vm.timeout}" />
+				</async>
+				<async doc:name="Async" doc:id="4b32ece1-2158-479e-ad98-27601ff017f0">
+					<ee:transform doc:name="ReqPayload Update Error Status in SFDC" doc:id="3dc705f2-6e0b-4864-b329-984a56d680d3" >
+						<ee:message >
+						</ee:message>
+						<ee:variables >
+							<ee:set-variable variableName="url_var" ><![CDATA[%dw 2.0
+output application/java
+---
+'https://' ++ p('secure::SalesForceQuery.host') ++ p('secure::SalesForcePatchContact.path')]]></ee:set-variable>
+							<ee:set-variable variableName="update_status_contact" ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Id" : vars.inputpayload.payload.New__c,
+	"C360_Response__c" : error.detailedDescription
+}]]]></ee:set-variable>
+						</ee:variables>
+					</ee:transform>
+					<logger level="INFO" doc:name="Log Request payload" doc:id="c23b6f2c-360b-4018-8cb3-4ec41fd3ece2" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Invoke SFDC API to Update Error Status in Contact Request URI: #[vars.url_var] #[vars.update_status_contact]||" />
+					<flow-ref doc:name="SFDCPatchContactSub_Flow" doc:id="7d76edf6-ede1-4b2f-90fd-0c2e4c27bba2" name="SFDCPatchContactSub_Flow"/>
+					<logger level="INFO" doc:name="Log SFDC Response" doc:id="d2a6231c-8a88-4945-ab17-59de1dd8a13b" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||IN INVITED USER FLOW - Response from SFDC API #[vars.sfdc_updatestatus_response]||" />
+				</async>
+				<ee:transform doc:name="Set Error Response" doc:id="c31b38da-18b4-482d-a054-912a250bb37e" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+[{
+	"Status" : "Internal Server Exception",
+	"Error" : error.errorType.namespace ++ error.errorType.identifier
+}]]]></ee:set-payload>
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="httpStatus" ><![CDATA[500]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<logger level="INFO" doc:name="Process Completed" doc:id="a8785de1-904d-4ed6-9b64-0e575fc9969f" message="#[vars.uniqueLogger]||Completed||Error||"/>
+			</on-error-propagate>
+		</error-handler>
+	</flow>
+	<sub-flow name="InvokeInviteUserDataToC360Sub_Flow" doc:id="e7caadcb-631a-43e1-a875-86ce2704743d" >
+		<logger level="INFO" doc:name="Logger Before Invoking c360 Admin API for Invite User" doc:id="a9e75530-bbd7-4b2b-96e6-dac55ccd15fe" message="#[vars.logger]||Request URI = #[vars.inviteduserc360url]||Request To c360 Admin API for Invited User #[vars.inviteduserc360input]||" />
+		<http:request method="PUT" doc:name="Call C360 Mule System API" doc:id="40394f60-9b0e-4ed1-888a-d8584c78ef07" config-ref="HTTP_Mule_Request_Configuration" path="${secure::inviteuserdata.basepath}" responseTimeout="${secure::http.mule.sys.c360.responsetimeout.inviteduser}">
+			<http:body ><![CDATA[#[vars.inviteduserc360input]]]></http:body>
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	"Admin_UserLoginID__c" : vars.Admin_UserLoginID__c
+}]]]></http:uri-params>
+			<http:response-validator>
+				<http:success-status-code-validator values="${secure::http.mule.sys.c360.responsevalidator.inviteduser}" />
+			</http:response-validator>
+		</http:request>
+		<set-variable value="#[payload]" doc:name="Set Invited User C360 Response" doc:id="6ebf0e23-2b83-4979-8dae-5ac41b331fcc" variableName="inviteduserc360output"/>
+		<logger level="INFO" doc:name="Response Received From c360 Admin API for Invite User" doc:id="b7615a4a-74f9-4faf-8a01-fa9ddfff4836" message="#[vars.logger]||#[vars.uniqueIdVar]:#[vars.New__c]||Response Received From c360 Admin API for Invited User #[vars.inviteduserc360output]||" />
+	</sub-flow>
+
+</mule>
