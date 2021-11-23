@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:module-msi-logger="http://www.mulesoft.org/schema/mule/module-msi-logger" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/module-msi-logger http://www.mulesoft.org/schema/mule/module-msi-logger/current/mule-module-msi-logger.xsd">
+	<flow name="prcsValidateUserAccountAssociationSub360" doc:id="fb2af8a8-8234-4660-bf29-b0bb0f10b568" >
+		<module-msi-logger:started doc:name="STARTED" doc:id="daea20fe-ab81-4821-b0f3-f8977c382299" msiLoggingResourceName="#[p('secure::resource.prcs.validateuseraccount')]" target="msiLogging"/>
+		<module-msi-logger:unique-transaction doc:name="UNIQUE TRANSACTION" doc:id="b0815582-b917-409b-b173-440460f06f2a" ignioUniqueTransaction="#['User ID is ' ++ payload.user_id default 'No User ID']" target="msiLogging"/>
+		<ee:transform doc:name="Map Input Parameters" doc:id="cf633bd7-fab5-44b1-a6ba-b1ecd46919b7">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="subc360data"><![CDATA[%dw 2.0
+output application/json
+
+---
+{
+login_id: payload.user_id,
+user_type: payload.user_type,
+customer_number: if(payload.user_type== p('secure::prcs.usertype.validateuseraccount')) payload.customer_id 
+                else payload.partner_mcn, 
+acc_source_ref: if (payload.user_type== p('secure::prcs.usertype.validateuseraccount')) write(null, 'application/json')
+                else payload.customer_id,
+acc_source: if (payload.user_type == p('secure::prcs.usertype.validateuseraccount')) write(null, 'application/json')
+                else (p('secure::prcs.account.source'))
+}]]></ee:set-variable>
+			</ee:variables>
+		
+</ee:transform>
+		<set-variable value="${secure::prcs.validateuseraccountsub360db.query}" doc:name="Set C360validateuseraccountquery" doc:id="d66d90a8-8620-4d81-bf2f-e6e18c96d1b9" variableName="c360validateuseraccountquery"/>
+		<module-msi-logger:processing doc:name="Before calling Mule System API for C360 DB to call validate_acc_user_assoc function" doc:id="77c063bd-d8bf-4719-9b3b-53e80ff5fdaa" ignioLogMessage="#['Before calling C360 DB Function and input to DB is ' ++ vars.c360validateuseraccountquery]"/>
+		<until-successful maxRetries="${secure::mule.http.reconnection.retry}" doc:name="Untill Successfull" doc:id="ef98d783-226b-4dac-b96b-7c812369f972" millisBetweenRetries="${secure::mule.http.reconnection.ms}">
+			<http:request method="#[p('secure::http.mule.sys.c360db.method')]" doc:name="Invoke Mule System API for Calling C360 DB Function" doc:id="7ec24357-b0db-4e0a-b50a-95e1f4f4e2f2" config-ref="HTTP_Mule_Request_Configuration" path="${secure::prcs.validateuseraccountc360db.path}" sendBodyMode="ALWAYS" responseTimeout="${secure::http.mule.sys.c360db.response.timeout}">
+				<http:body ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+    "query": vars.c360validateuseraccountquery
+}]]]></http:body>
+				<http:response-validator>
+					<http:success-status-code-validator values="${secure::http.mule.sys.c360db.responsevalidator.validateuseraccount}" />
+				</http:response-validator>
+			</http:request>
+		</until-successful>
+		<module-msi-logger:processing doc:name="After calling Mule System API for C360 DB to call validate_acc_user_assoc function" doc:id="d64c1f71-de11-44bb-bcac-c474f5980f4f" ignioLogMessage="#['After calling C360 DB Function and Response from DB is ' ++ write(payload[0].cust_user_assoc.value, &quot;application/json&quot;)]"/>
+		<ee:transform doc:name="Map Final Response" doc:id="9e510b60-369d-4aa3-8ec4-fdba97440e9d">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if(isEmpty(payload[0].cust_user_assoc.value)) payload[0].cust_user_assoc else read(payload[0].cust_user_assoc.value,'application/json')]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<module-msi-logger:completed-success doc:name="COMPLETED(Success)" doc:id="978f273f-aa6b-4371-824d-8585afc6d963" msiLoggingResourceName="#[p('secure::resource.prcs.validateuseraccount')]"/>
+		<error-handler>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="5407295d-ef2c-4978-9b6f-1f24e1a0bdf6" type="ANY">
+				<module-msi-logger:processing doc:name="PROCESSING" doc:id="bd76de08-010e-4626-ab25-b0e329822817" ignioLogMessage="Inside Exception Handling Block of prcsValidateUserAccountAssociationSub360 Flow"/>
+				<async doc:name="Async" doc:id="af6c9165-eea2-4736-8594-3654865731d2" >
+					<ee:transform doc:name="Payload sent to Error Handler" doc:id="8835289c-510b-46af-aa9f-d4baeb0792a4">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ErrorMessage: {
+		UniqueQualifier: p('secure::er.uniq.qualifier.prcs.validateuseraccount'),
+		CustomMessage:  p('secure::er.mod.name.prcs.validateuseraccount') ++ ":: Error::" ++ error.errorType.namespace ++ error.errorType.identifier ++ ":: " ++ p('secure::er.cust.msg.prcs.validateuseraccount'),
+		Error: {
+			time: now() as String {format: "dd-MMM-yyyy HH:mm:ss"},
+			error: error.detailedDescription,
+			errorType: error.errorType.namespace ++ error.errorType.identifier,
+			errorDump: error.detailedDescription ,
+			service: p('secure::resource.prcs.validateuseraccount'),
+			user: p('secure::er.user'),
+			nestedErrorInfo: {
+				time: "1",
+				error: "1",
+				errorType: "1",
+				errorDump: "1",
+				service1: "1",
+				user: "1"
+			}
+		},
+		Module: {
+			ModuleName: p('secure::er.mod.name.prcs.validateuseraccount'),
+			ServiceName: p('secure::resource.prcs.validateuseraccount')
+		},
+		Action: {
+			Email: {
+				SendEmail: p('secure::er.send.email'),
+				DistributionList: p('secure::er.email.list.prcs.validateuseraccount')
+			},
+			Ticket: {
+				CreateTicket: p('secure::er.create.ticket'),
+				Impact: p('secure::er.impact'),
+				Urgency: p('secure::er.urgency') ,
+				SupportTeam: p('secure::er.support.team'),
+				Category: p('secure::er.category'),
+				SubCategory: p('secure::er.sub.category'),
+				CMDBCI: p('secure::er.CMDBCI')
+			}
+		},
+		SuppressDuplicates: {
+			EnableSuppression: p('secure::er.enable.suppression'),
+			Suppress_On_Same_Message: p('secure::er.suppress.on.same.message')
+		}
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<vm:publish doc:name="Publishing Error Events" doc:id="79e4be2f-79f1-46e6-a6f8-30178e1f6056" config-ref="ErrorHandler_VM_Config" queueName="ErrorHandlerVMQueue" timeout="${secure::er.vm.timeout}"/>
+
+				</async>
+				<ee:transform doc:name="Error Message Payload" doc:id="fbef2ef8-b6e0-4b39-875a-39eb3d5640c7" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "result": {
+        "warningMessage": "Exception occurred",
+        "success":false,
+        "error": error.description
+    }
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<module-msi-logger:completed-error doc:name="COMPLETED(Error)" doc:id="dae88e5a-0bbb-4198-8e53-7a5244ac6dc4" msiLoggingResourceName="#[p('secure::resource.prcs.validateuseraccount')]"/>
+			
+</on-error-propagate>
+</error-handler>		
+	</flow>
+</mule>
