@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:vm="http://www.mulesoft.org/schema/mule/vm"
+	xmlns:module-msi-logger="http://www.mulesoft.org/schema/mule/module-msi-logger" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/module-msi-logger http://www.mulesoft.org/schema/mule/module-msi-logger/current/mule-module-msi-logger.xsd">
+	<flow name="prcsDisassociateDeviceSub360" doc:id="b95c2ee7-1bc9-4c59-8d68-b788a1175aca" >
+		<module-msi-logger:started doc:name="STARTED" doc:id="d808da9c-b4f3-43bc-a9a1-52d2b7a1baaf" msiLoggingResourceName="#[p('secure::resource.prcs.disassociatedevice')]" target="msiLogging"/>
+		<module-msi-logger:unique-transaction doc:name="UNIQUE TRANSACTION" doc:id="0d2ffcf5-ba6e-460b-999b-2ab6bf89d531" ignioUniqueTransaction="#['Transaction ID is ' ++ payload.transaction_id default 'NO transaction_id']" target="msiLogging"/>
+		<ee:transform doc:name="Map Input Parameters" doc:id="507594bd-eb4c-429d-ac55-4cd12d1f89d4" >
+			<ee:message >
+			</ee:message>
+			<ee:variables >
+				<ee:set-variable variableName="subc360data" ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"transactionid" : payload.transaction_id,
+	"Subscription_licensed_entity_id" : payload.subscription_licensed_entity_id	joinBy","
+}
+]]></ee:set-variable>
+			</ee:variables>
+		
+</ee:transform>
+		<set-variable value="${secure::prcs.disassociatedevicesub360db.query}" doc:name="Set C360disassociatedevicequery" doc:id="181bb2ee-f341-4546-925d-6cad4733d7b8" variableName="c360disassociatedevicequery"/>
+		<module-msi-logger:processing doc:name="Before calling Mule System API for C360 DB to call diassociate_licensed_entity function" doc:id="14b6aa07-1de1-4cf9-8585-58fda1b787c3" ignioLogMessage="#['Before calling C360 DB Function and input to DB is ' ++ vars.c360disassociatedevicequery]" />
+		<until-successful maxRetries="${secure::mule.http.reconnection.retry}" doc:name="Untill Successfull" doc:id="0314efe8-18e6-491c-931f-4ce3c485f6d4" millisBetweenRetries="${secure::mule.http.reconnection.ms}">
+			<http:request method="#[p('secure::http.mule.sys.c360db.method')]" doc:name="Invoke Mule System API for Calling C360 DB Function" doc:id="fc84afcd-9346-4d0e-a750-7bbe471fed15" config-ref="HTTP_Mule_Request_Configuration" path="${secure::prcs.disassociatedevicec360db.path}" sendBodyMode="ALWAYS" responseTimeout="${secure::http.mule.sys.c360db.response.timeout}">
+				<http:body ><![CDATA[#[%dw 2.0
+output application/json
+---
+{
+    "query": vars.c360disassociatedevicequery
+}]]]></http:body>
+				<http:response-validator>
+					<http:success-status-code-validator values="${secure::http.mule.sys.c360db.responsevalidator.disassociatedevice}" />
+				</http:response-validator>
+			</http:request>
+		</until-successful>
+		<module-msi-logger:processing doc:name="After calling Mule System API for C360 DB to call diassociate_licensed_entity function" doc:id="84667939-4546-4085-986a-67337473fa27" ignioLogMessage="#['After calling C360 DB Function and Response from DB is ' ++ write(payload, &quot;application/json&quot;)]" />
+		<ee:transform doc:name="Map Final Response" doc:id="476fb93b-c18d-4bcf-8772-06fe8964075a">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if(isEmpty(payload[0].allocation_data.value)) payload[0].allocation_data else read(payload[0].allocation_data.value,'application/json')]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<module-msi-logger:completed-success doc:name="COMPLETED(Success)" doc:id="b7ded3f3-21ac-4e74-971b-c9410af173f0" msiLoggingResourceName="#[p('secure::resource.prcs.disassociatedevice')]" />
+		<error-handler>
+				<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="df3bb232-85e7-46fd-85b7-533918464491" type="ANY">
+				<module-msi-logger:processing doc:name="PROCESSING" doc:id="175a061e-c007-473f-965b-9b6fe44346f8" ignioLogMessage="Inside Exception Handling Block of prcsDisassociateDeviceSub360 Flow"/>
+				<async doc:name="Async" doc:id="2d32b9c8-2205-419c-a495-894237cbb1cc" >
+					<ee:transform doc:name="Payload sent to Error Handler" doc:id="a6f3baa2-d447-418f-896e-903828b9ee68">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	ErrorMessage: {
+		UniqueQualifier: p('secure::er.uniq.qualifier.prcs.disassociatedevice'),
+		CustomMessage:  p('er.mod.name.prcs.disassociatedevice') ++ ":: Error::" ++ error.errorType.namespace ++ error.errorType.identifier ++ ":: " ++ p('secure::er.cust.msg.prcs.disassociatedevice'),
+		Error: {
+			time: now() as String {format: "dd-MMM-yyyy HH:mm:ss"},
+			error: error.detailedDescription,
+			errorType: error.errorType.namespace ++ error.errorType.identifier,
+			errorDump: error.detailedDescription ,
+			service: p('secure::resource.prcs.disassociatedevice'),
+			user: p('secure::er.user'),
+			nestedErrorInfo: {
+				time: "1",
+				error: "1",
+				errorType: "1",
+				errorDump: "1",
+				service1: "1",
+				user: "1"
+			}
+		},
+		Module: {
+			ModuleName: p('secure::er.mod.name.prcs.disassociatedevice'),
+			ServiceName: p('secure::resource.prcs.disassociatedevice')
+		},
+		Action: {
+			Email: {
+				SendEmail: p('secure::er.send.email'),
+				DistributionList: p('secure::er.email.list.prcs.disassociatedevice')
+			},
+			Ticket: {
+				CreateTicket: p('secure::er.create.ticket'),
+				Impact: p('secure::er.impact'),
+				Urgency: p('secure::er.urgency') ,
+				SupportTeam: p('secure::er.support.team'),
+				Category: p('secure::er.category'),
+				SubCategory: p('secure::er.sub.category'),
+				CMDBCI: p('secure::er.CMDBCI')
+			}
+		},
+		SuppressDuplicates: {
+			EnableSuppression: p('secure::er.enable.suppression'),
+			Suppress_On_Same_Message: p('secure::er.suppress.on.same.message')
+		}
+	}
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					<vm:publish doc:name="Publishing Error Events" doc:id="2cfdd917-56a2-4372-ae43-9525cd727942" config-ref="ErrorHandler_VM_Config" queueName="ErrorHandlerVMQueue" timeout="${secure::er.vm.timeout}"/>
+
+				</async>
+				<ee:transform doc:name="Error Message Payload" doc:id="9c119727-e2f8-4f62-a968-c09dba4b537a" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "result": {
+        "warningMessage": "Exception occurred",
+        "success":false,
+        "error": error.description
+    }
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+				<module-msi-logger:completed-error doc:name="COMPLETED(Error)" doc:id="0d7775e2-17b1-43d7-8183-5fdd8a9a0fb1" msiLoggingResourceName="#[p('secure::resource.prcs.disassociatedevice')]"/>
+			
+</on-error-propagate>
+</error-handler>		
+	</flow>
+</mule>
